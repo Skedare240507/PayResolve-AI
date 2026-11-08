@@ -20,6 +20,14 @@ target/
 *.war
 .m2/
 .mvn/wrapper/maven-wrapper.jar
+bin/
+
+# Backend Spring config (real application.yml contains local config, not committed)
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.yml
+!backend/src/main/resources/application.yml.example
+!backend/src/test/resources/application.yml
+!backend/src/test/resources/application-*.yml
 
 # Node & Frontend
 node_modules/
@@ -34,9 +42,18 @@ pnpm-debug.log*
 # Database & Docker local volumes
 .postgres-data/
 
-#Github
-.gitkeep
-
 # Logs
 logs/
 *.log
+
+# Design assets
+design/
+
+# Scratch & temporary artifacts
+scratch/
+report/
+submission/
+PROJECT_REPORT.md
+sponsors.md
+memory.md 
+

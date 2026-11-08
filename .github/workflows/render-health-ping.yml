@@ -1,0 +1,88 @@
+name: Render Free-Tier Health Ping
+
+# Configurable demo/judging window.
+# Update DEMO_START_EPOCH and DEMO_END_EPOCH when the window changes.
+# Nov  8 2026 00:00:00 UTC = 1794096000
+# Nov 16 2026 23:59:59 UTC = 1794873599
+env:
+  DEMO_START_EPOCH: "1794096000"
+  DEMO_END_EPOCH: "1794873599"
+
+on:
+  schedule:
+    # Pings /actuator/health every 10 minutes to keep the Render free instance warm
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Override target API URL (full https URL, e.g. https://payresolve-api.onrender.com)'
+        required: false
+        default: ''
+
+jobs:
+  ping-health:
+    name: Ping /actuator/health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend Health Endpoint
+        env:
+          RENDER_API_URL: ${{ github.event.inputs.target_url || secrets.RENDER_API_URL }}
+        run: |
+          # Require a full https URL — fail clearly rather than silently using a guessed name
+          if [ -z "$RENDER_API_URL" ]; then
+            echo "::error::RENDER_API_URL secret is not set."
+            echo "::error::Go to Settings > Secrets and variables > Actions and add RENDER_API_URL"
+            echo "::error::Value must be the full https URL of the deployed API, e.g. https://payresolve-api.onrender.com"
+            exit 1
+          fi
+
+          if [[ "$RENDER_API_URL" != https://* ]]; then
+            echo "::error::RENDER_API_URL must start with https://. Got: $RENDER_API_URL"
+            exit 1
+          fi
+
+          # Only run scheduled pings inside the demo/judging window
+          CURRENT_EPOCH=$(date +%s)
+          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
+            if [ "$CURRENT_EPOCH" -lt "$DEMO_START_EPOCH" ] || [ "$CURRENT_EPOCH" -gt "$DEMO_END_EPOCH" ]; then
+              echo "Outside active demo/judging window (${DEMO_START_EPOCH} - ${DEMO_END_EPOCH}). Skipping scheduled keep-alive ping."
+              exit 0
+            fi
+          fi
+
+          TARGET="${RENDER_API_URL%/}/actuator/health"
+          echo "Sending keep-alive ping to: $TARGET"
+
+          # Retry up to 3 times with 20-second waits between attempts.
+          # A single failure may be a cold-start (free tier waking up); three in a row is a real problem.
+          ATTEMPTS=0
+          MAX_ATTEMPTS=3
+          WAIT_SECONDS=20
+
+          while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            echo "Attempt $ATTEMPTS of $MAX_ATTEMPTS..."
+
+            HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" --max-time 30 "$TARGET" || echo "000")
+            echo "HTTP response code: $HTTP_CODE"
+
+            if [ -s response.json ]; then
+              cat response.json
+              echo ""
+            fi
+
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "Health check succeeded on attempt $ATTEMPTS. Render instance is active and warm."
+              exit 0
+            else
+              echo "Warning: Health check returned HTTP $HTTP_CODE on attempt $ATTEMPTS."
+              if [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; then
+                echo "Waiting ${WAIT_SECONDS}s before retry..."
+                sleep $WAIT_SECONDS
+              fi
+            fi
+          done
+
+          echo "::error::Health check failed after $MAX_ATTEMPTS attempts. Last HTTP code: $HTTP_CODE"
+          echo "::error::The Render instance may be down or the URL may be wrong."
+          exit 1

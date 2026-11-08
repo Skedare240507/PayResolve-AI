@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
 
 export default function PasswordUpdatedPage() {
@@ -24,44 +24,35 @@ export default function PasswordUpdatedPage() {
     <AuthLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Password updated
           </h2>
-          <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
             You can sign in with your new password. Other sessions were signed out.
           </p>
         </div>
 
         <div className="space-y-3 pt-2">
-          <div className="text-xs font-medium text-slate-600">
+          <div className="text-xs font-normal text-slate-600 dark:text-slate-400">
             Redirecting to sign in in {seconds} s
           </div>
 
-          {/* Progress Bar matching design */}
-          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+          {/* Progress Bar */}
+          <div className="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#0066d6] transition-all duration-1000 ease-linear"
-              style={{ width: `${progressPercent}%` }}
-            ></div>
+              className="h-full bg-[#0066cc] transition-all duration-1000 ease-linear"
+              style={{ width: `${Math.max(15, progressPercent)}%` }}
+            />
           </div>
         </div>
 
         <div className="pt-2">
           <button
             onClick={() => navigate('/signin')}
-            className="w-full py-2.5 px-4 rounded-lg bg-[#0066d6] hover:bg-blue-700 text-white font-medium text-sm shadow-sm cursor-pointer text-center block"
+            className="w-full py-2.5 px-4 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white font-medium text-sm shadow-sm cursor-pointer transition-all"
           >
             Sign in now
           </button>
-        </div>
-
-        <div className="pt-2">
-          <Link
-            to="/"
-            className="text-xs font-medium text-slate-500 hover:text-slate-700 cursor-pointer"
-          >
-            &larr; Back to home
-          </Link>
         </div>
       </div>
     </AuthLayout>

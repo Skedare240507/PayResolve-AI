@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "payresolve-collection-v1",
     "name": "PayResolve AI Sandbox & API",
-    "description": "API collection for PayPal Sandbox payments, webhooks, and PayResolve exception management.",
+    "description": "API collection for PayPal Sandbox payments, server captures, webhook signature verification, disputes, and PayResolve exception management.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -10,7 +10,21 @@
       "name": "PayPal Sandbox",
       "item": [
         {
-          "name": "Get Access Token",
+          "name": "1. Get OAuth Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.access_token) {",
+                  "    pm.environment.set(\"paypal_access_token\", json.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -34,7 +48,192 @@
               "raw": "{{paypal_base_url}}/v1/oauth2/token",
               "host": ["{{paypal_base_url}}"],
               "path": ["v1", "oauth2", "token"]
+            },
+            "description": "Fetches a fresh OAuth2 Bearer token from PayPal sandbox."
+          }
+        },
+        {
+          "name": "2. Create Order (Orders v2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.id) {",
+                  "    pm.environment.set(\"paypal_order_id\", json.id);",
+                  "}",
+                  "if (json.links) {",
+                  "    const approve = json.links.find(l => l.rel === 'approve');",
+                  "    if (approve) {",
+                  "        pm.environment.set(\"paypal_approve_url\", approve.href);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" },
+              { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [\n    {\n      \"reference_id\": \"default\",\n      \"custom_id\": \"{{shop_order_id}}\",\n      \"amount\": {\n        \"currency_code\": \"USD\",\n        \"value\": \"84.50\"\n      }\n    }\n  ],\n  \"application_context\": {\n    \"return_url\": \"http://localhost:5173/shop/success\",\n    \"cancel_url\": \"http://localhost:5173/shop/cancel\",\n    \"user_action\": \"PAY_NOW\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{paypal_base_url}}/v2/checkout/orders",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v2", "checkout", "orders"]
+            },
+            "description": "Creates an order in Orders v2 embedding shop_order_id into custom_id."
+          }
+        },
+        {
+          "name": "3. Approve Order (Browser Action)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{paypal_approve_url}}",
+              "host": ["{{paypal_approve_url}}"]
+            },
+            "description": "NOTE: Open this URL in a browser to simulate the buyer approving payment using the PayPal Sandbox personal account. Once approved, proceed to step 4 (Capture)."
+          }
+        },
+        {
+          "name": "4. Capture Order (Server-Side)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.purchase_units && json.purchase_units[0].payments && json.purchase_units[0].payments.captures) {",
+                  "    const cap = json.purchase_units[0].payments.captures[0];",
+                  "    pm.environment.set(\"paypal_capture_id\", cap.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" },
+              { "key": "Prefer", "value": "return=representation" },
+              { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{paypal_base_url}}/v2/checkout/orders/{{paypal_order_id}}/capture",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v2", "checkout", "orders", "{{paypal_order_id}}", "capture"]
+            },
+            "description": "Captures the approved PayPal order server-side."
+          }
+        },
+        {
+          "name": "5. Get Order Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "url": {
+              "raw": "{{paypal_base_url}}/v2/checkout/orders/{{paypal_order_id}}",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v2", "checkout", "orders", "{{paypal_order_id}}"]
+            },
+            "description": "Retrieves the order details including status and attached captures/refunds."
+          }
+        },
+        {
+          "name": "6. Get Capture Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "url": {
+              "raw": "{{paypal_base_url}}/v2/payments/captures/{{paypal_capture_id}}",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v2", "payments", "captures", "{{paypal_capture_id}}"]
+            },
+            "description": "Queries capture details including gross amount, fee, and net amount (read-only)."
+          }
+        },
+        {
+          "name": "7. Get Refund Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "url": {
+              "raw": "{{paypal_base_url}}/v2/payments/refunds/{{paypal_refund_id}}",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v2", "payments", "refunds", "{{paypal_refund_id}}"]
+            },
+            "description": "Queries refund details (read-only)."
+          }
+        },
+        {
+          "name": "8. Verify Webhook Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auth_algo\": \"SHA256withRSA\",\n  \"cert_url\": \"https://api-m.sandbox.paypal.com/v1/notifications/certs/CERT-360002\",\n  \"transmission_id\": \"sample-transmission-id-001\",\n  \"transmission_sig\": \"SAMPLE_SIG_HERE\",\n  \"transmission_time\": \"2026-11-07T12:00:00Z\",\n  \"webhook_id\": \"{{paypal_webhook_id}}\",\n  \"webhook_event\": {\n    \"id\": \"WH-SAMPLE-EVENT-001\",\n    \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n    \"resource_type\": \"capture\",\n    \"resource\": {\n      \"id\": \"{{paypal_capture_id}}\",\n      \"status\": \"COMPLETED\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{paypal_base_url}}/v1/notifications/verify-webhook-signature",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v1", "notifications", "verify-webhook-signature"]
+            },
+            "description": "Sends incoming webhook headers and event payload to PayPal for cryptographic verification."
+          }
+        },
+        {
+          "name": "9. List Customer Disputes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "url": {
+              "raw": "{{paypal_base_url}}/v1/customer/disputes",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v1", "customer", "disputes"]
+            },
+            "description": "Lists customer disputes from PayPal Sandbox (requires dispute scopes; otherwise synthetic fixtures are used in PayResolve)."
+          }
+        },
+        {
+          "name": "10. Get Dispute Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+            ],
+            "url": {
+              "raw": "{{paypal_base_url}}/v1/customer/disputes/{{paypal_dispute_id}}",
+              "host": ["{{paypal_base_url}}"],
+              "path": ["v1", "customer", "disputes", "{{paypal_dispute_id}}"]
+            },
+            "description": "Retrieves comprehensive details and evidence for a specific dispute."
           }
         }
       ]
@@ -43,6 +242,30 @@
       "name": "PayResolve API",
       "item": [
         {
+          "name": "PayPal Webhook Ingest / Replay",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "PAYPAL-AUTH-ALGO", "value": "SHA256withRSA" },
+              { "key": "PAYPAL-CERT-URL", "value": "https://api-m.sandbox.paypal.com/v1/notifications/certs/CERT-360002" },
+              { "key": "PAYPAL-TRANSMISSION-ID", "value": "TRANS-REPLAY-{{$guid}}" },
+              { "key": "PAYPAL-TRANSMISSION-SIG", "value": "DUMMY_TEST_SIGNATURE" },
+              { "key": "PAYPAL-TRANSMISSION-TIME", "value": "2026-11-07T12:00:00Z" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-REPLAY-EVENT-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"resource_type\": \"capture\",\n  \"summary\": \"Payment capture completed\",\n  \"resource\": {\n    \"id\": \"{{paypal_capture_id}}\",\n    \"status\": \"COMPLETED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"84.50\"\n    },\n    \"custom_id\": \"{{shop_order_id}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/api/webhooks/paypal",
+              "host": ["{{api_base_url}}"],
+              "path": ["api", "webhooks", "paypal"]
+            },
+            "description": "Sends or replays a PayPal webhook event into the PayResolve durable event inbox."
+          }
+        },
+        {
           "name": "List Cases",
           "request": {
             "method": "GET",
@@ -50,25 +273,20 @@
               "raw": "{{api_base_url}}/api/cases",
               "host": ["{{api_base_url}}"],
               "path": ["api", "cases"]
-            }
+            },
+            "description": "Lists exception investigation cases from PayResolve."
           }
         },
         {
-          "name": "PayPal Webhook Ingest",
+          "name": "Get Case Details",
           "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"id\": \"WH-SAMPLE-EVENT-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"resource_type\": \"capture\",\n  \"resource\": {}\n}"
-            },
+            "method": "GET",
             "url": {
-              "raw": "{{api_base_url}}/api/webhooks/paypal",
+              "raw": "{{api_base_url}}/api/cases/{{case_id}}",
               "host": ["{{api_base_url}}"],
-              "path": ["api", "webhooks", "paypal"]
-            }
+              "path": ["api", "cases", "{{case_id}}"]
+            },
+            "description": "Retrieves case investigation details and evidence graph."
           }
         }
       ]

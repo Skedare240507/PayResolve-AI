@@ -1,0 +1,111 @@
+# Copy application.yml.example to application.yml. This file contains no secrets,
+# only ${ENV_VAR} placeholders. Real values come from the .env file or the host's environment.
+spring:
+  application:
+    name: payresolve
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+  datasource:
+    # Supabase PostgreSQL Session Pooler connection string (IPv4 compatible, port 5432)
+    # Format: jdbc:postgresql://aws-0-[REGION].pooler.supabase.com:5432/postgres?sslmode=require
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/payresolve}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 30000
+      idle-timeout: 60000
+      max-lifetime: 180000
+      keepalive-time: 30000
+      validation-timeout: 5000
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    # baseline-on-migrate is intentionally false.
+    # Setting it true causes Flyway to silently skip all migrations on a database
+    # that already has tables but no flyway_schema_history (e.g. a manually seeded
+    # Supabase project). That means schema drift goes undetected. Leave false and
+    # run V1 from scratch on a clean database.
+    baseline-on-migrate: false
+    locations: classpath:db/migration
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:}
+        chat:
+          options:
+            model: ${GEMINI_MODEL:gemini-2.0-flash}
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  # Render terminates TLS and proxies HTTP to the container.
+  # native tells Spring to trust X-Forwarded-Proto so that redirect URLs,
+  # session cookies, and actuator links use https rather than http.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      timeout: ${SESSION_TIMEOUT:30m}
+      cookie:
+        # http-only prevents JavaScript access to the session cookie.
+        http-only: true
+        # secure: true sends the cookie only over https.
+        # Leave true in production (behind Render's TLS proxy).
+        # For local dev without https, override to false in your .env.
+        secure: ${SESSION_COOKIE_SECURE:true}
+        # SameSite=Lax allows the cookie to be sent on top-level navigations
+        # (e.g. the PayPal return redirect) while blocking cross-site POST requests.
+        same-site: Lax
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+payresolve:
+  public-url: ${APP_PUBLIC_URL:http://localhost:8080}
+  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  demo-mode: ${DEMO_MODE:true}
+  session-timeout: ${SESSION_TIMEOUT:30m}
+  cors:
+    allowed-origins: ${FRONTEND_ORIGIN:http://localhost:5173}
+  ingest:
+    worker-enabled: ${INGEST_WORKER_ENABLED:true}
+    worker-interval-ms: ${INGEST_WORKER_INTERVAL_MS:2000}
+    max-attempts: ${INGEST_MAX_ATTEMPTS:3}
+    initial-backoff-ms: ${INGEST_INITIAL_BACKOFF_MS:1000}
+  supabase:
+    url: ${SUPABASE_URL:}
+    anon-key: ${SUPABASE_ANON_KEY:}
+  paypal:
+    base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
+    client-id: ${PAYPAL_CLIENT_ID:}
+    client-secret: ${PAYPAL_CLIENT_SECRET:}
+    webhook-id: ${PAYPAL_WEBHOOK_ID:}
+    connect-timeout-ms: ${PAYPAL_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${PAYPAL_READ_TIMEOUT_MS:10000}
+    use-synthetic-disputes: ${PAYPAL_USE_SYNTHETIC_DISPUTES:false}
+  ai:
+    provider: ${AI_PROVIDER:groq}
+    groq:
+      api-key: ${GROQ_API_KEY:}
+      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+      base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+    gemini:
+      api-key: ${GEMINI_API_KEY:${spring.ai.google.genai.api-key:}}
+      model: ${GEMINI_MODEL:gemini-2.0-flash}
+  auth:
+    operator-username: ${OPERATOR_USERNAME:operator}
+    operator-password: ${OPERATOR_PASSWORD:}
+    viewer-username: ${VIEWER_USERNAME:viewer}
+    viewer-password: ${VIEWER_PASSWORD:}

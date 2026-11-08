@@ -1,0 +1,54 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Runs every 2 days at 00:00 UTC to prevent Supabase free tier inactivity pause (7-day limit)
+    - cron: '0 0 */2 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions console
+
+jobs:
+  keepalive:
+    name: Ping Supabase Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive ping to Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing SUPABASE_URL or SUPABASE_ANON_KEY repository secret."
+            echo "::error::Go to Settings > Secrets and variables > Actions and add both secrets."
+            echo "::error::SUPABASE_URL: https://<project-ref>.supabase.co"
+            echo "::error::SUPABASE_ANON_KEY: your Supabase project's anon public key"
+            exit 1
+          fi
+
+          echo "Sending keep-alive ping to ${SUPABASE_URL}/rest/v1/keepalive..."
+
+          # POST an empty object into public.keepalive table via PostgREST
+          # The keepalive table has an INSERT policy for anon (see V2__keepalive.sql).
+          # RLS is enabled on this table with a permissive policy allowing anon INSERT.
+          HTTP_STATUS=$(curl -s -o response_body.json -w "%{http_code}" \
+            -X POST "${SUPABASE_URL}/rest/v1/keepalive" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d '{}')
+
+          echo "Response HTTP status: $HTTP_STATUS"
+          if [ -s response_body.json ]; then
+            echo "Response payload:"
+            cat response_body.json
+          fi
+
+          # Fail loudly if HTTP status is not 2xx (200, 201, 204)
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Supabase keepalive ping failed with status ${HTTP_STATUS}"
+            echo "::error::Check that SUPABASE_URL and SUPABASE_ANON_KEY are correct."
+            echo "::error::Also confirm the keepalive table RLS policy allows anon INSERT (see supabase/keepalive.sql)."
+            exit 1
+          fi
+
+          echo "Supabase keep-alive ping succeeded with status ${HTTP_STATUS}."

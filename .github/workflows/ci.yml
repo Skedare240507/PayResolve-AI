@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+# Cancel previous runs for the same branch on new pushes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend Build & Test
@@ -35,6 +40,9 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Prepare application configuration
+        run: cp backend/src/main/resources/application.yml.example backend/src/main/resources/application.yml
+
       - name: Run Maven verification
         env:
           DATABASE_URL: jdbc:postgresql://localhost:5432/payresolve
@@ -49,7 +57,7 @@ jobs:
           ./mvnw verify -B
 
   frontend:
-    name: Frontend Build & Lint
+    name: Frontend Lint & Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -67,7 +75,27 @@ jobs:
           cd frontend
           npm ci
 
+      - name: Lint frontend
+        run: |
+          cd frontend
+          npm run lint
+
       - name: Build frontend
         run: |
           cd frontend
           npm run build
+
+  check-env-names:
+    name: Env Name Consistency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check env variable name consistency
+        run: node scripts/check-env-names.mjs

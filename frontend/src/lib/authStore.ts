@@ -1,86 +1,34 @@
+import { useState, useEffect } from 'react';
+import { api, type UserDto, type ForgotPasswordResponse, ApiError } from './api';
+
 export interface UserAccount {
+  id?: number;
   username: string;
   email: string;
-  passwordHash: string; // Plain/hashed simulation for client-side persistence
   role: 'operator' | 'viewer';
-  createdAt: string;
+  authenticated: boolean;
+  createdAt?: string;
 }
 
-const STORAGE_USERS_KEY = 'payresolve_users_db';
 const STORAGE_SESSION_KEY = 'payresolve_current_user';
-const STORAGE_RESET_KEY = 'payresolve_reset_tokens';
 
-// Seed default accounts matching .env and hackathon requirements
-const DEFAULT_USERS: UserAccount[] = [
-  {
-    username: 'operator',
-    email: 'operator@payresolve.dev',
-    passwordHash: 'operator123',
-    role: 'operator',
-    createdAt: new Date().toISOString()
-  },
-  {
-    username: 'viewer',
-    email: 'viewer@payresolve.dev',
-    passwordHash: 'viewer123',
-    role: 'viewer',
-    createdAt: new Date().toISOString()
-  }
-];
+function normalizeRole(role: string): 'operator' | 'viewer' {
+  return role.toUpperCase() === 'OPERATOR' ? 'operator' : 'viewer';
+}
 
-export const initUserStore = () => {
-  const existing = localStorage.getItem(STORAGE_USERS_KEY);
-  if (!existing) {
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_USERS));
-  }
-};
-
-export const getUsers = (): UserAccount[] => {
-  initUserStore();
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_USERS_KEY) || '[]');
-  } catch {
-    return DEFAULT_USERS;
-  }
-};
-
-export const registerUser = (account: Omit<UserAccount, 'createdAt'>): { success: boolean; error?: string } => {
-  const users = getUsers();
-  const exists = users.some(
-    u => u.username.toLowerCase() === account.username.toLowerCase() || 
-         u.email.toLowerCase() === account.email.toLowerCase()
-  );
-
-  if (exists) {
-    return { success: false, error: 'Username or email already registered.' };
-  }
-
-  const newUser: UserAccount = {
-    ...account,
-    createdAt: new Date().toISOString()
+function userDtoToAccount(dto: UserDto): UserAccount {
+  return {
+    id: dto.id,
+    username: dto.username,
+    email: dto.email,
+    role: normalizeRole(dto.role),
+    authenticated: !!dto.authenticated,
+    createdAt: new Date().toISOString(),
   };
-
-  users.push(newUser);
-  localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
-  return { success: true };
-};
-
-export const authenticateUser = (identifier: string, password: string): { success: boolean; user?: UserAccount; error?: string } => {
-  const users = getUsers();
-  const user = users.find(
-    u => (u.username.toLowerCase() === identifier.toLowerCase() || u.email.toLowerCase() === identifier.toLowerCase()) &&
-         u.passwordHash === password
-  );
-
-  if (!user) {
-    return { success: false, error: 'Invalid username/email or password.' };
-  }
-
-  localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(user));
-  return { success: true, user };
-};
+}
 
 export const getCurrentUser = (): UserAccount | null => {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(STORAGE_SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -89,28 +37,139 @@ export const getCurrentUser = (): UserAccount | null => {
   }
 };
 
-export const logoutUser = () => {
-  localStorage.removeItem(STORAGE_SESSION_KEY);
+export const setCurrentUser = (user: UserAccount | null) => {
+  if (typeof window === 'undefined') return;
+  if (user) {
+    localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(STORAGE_SESSION_KEY);
+  }
+  window.dispatchEvent(new Event('payresolve_auth_changed'));
 };
 
-export const createPasswordResetToken = (email: string): string => {
-  const token = 'tok_' + Math.random().toString(36).substring(2, 10);
-  const existingTokens: Record<string, string> = JSON.parse(localStorage.getItem(STORAGE_RESET_KEY) || '{}');
-  existingTokens[email.toLowerCase()] = token;
-  localStorage.setItem(STORAGE_RESET_KEY, JSON.stringify(existingTokens));
-  return token;
+export const logoutUser = async () => {
+  try {
+    await api.auth.logout();
+  } catch {
+    // ignore
+  } finally {
+    setCurrentUser(null);
+  }
 };
 
-export const updatePasswordByEmail = (emailOrUsername: string, newPassword: string): boolean => {
-  const users = getUsers();
-  const target = users.find(
-    u => u.email.toLowerCase() === emailOrUsername.toLowerCase() ||
-         u.username.toLowerCase() === emailOrUsername.toLowerCase()
-  );
-
-  if (!target) return false;
-
-  target.passwordHash = newPassword;
-  localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
-  return true;
+export const authenticateUser = async (
+  username: string,
+  password: string
+): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
+  try {
+    const dto = await api.auth.login({ username, password });
+    const account = userDtoToAccount(dto);
+    setCurrentUser(account);
+    return { success: true, user: account };
+  } catch (err: unknown) {
+    let msg = 'Invalid username or password.';
+    if (err instanceof ApiError) {
+      msg = err.problemDetail?.detail || err.message;
+    } else if (err instanceof Error) {
+      msg = err.message;
+    }
+    return { success: false, error: msg };
+  }
 };
+
+export const registerUser = async (
+  account: { username: string; email: string; password?: string; passwordHash?: string }
+): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
+  try {
+    const password = account.password || account.passwordHash || 'demoPass123';
+    const dto = await api.auth.signup({
+      username: account.username,
+      email: account.email,
+      password,
+    });
+    const userAccount = userDtoToAccount(dto);
+    setCurrentUser(userAccount);
+    return { success: true, user: userAccount };
+  } catch (err: unknown) {
+    let msg = 'Failed to register account.';
+    if (err instanceof ApiError) {
+      msg = err.problemDetail?.detail || err.message;
+    } else if (err instanceof Error) {
+      msg = err.message;
+    }
+    return { success: false, error: msg };
+  }
+};
+
+export const requestPasswordReset = async (
+  identifier: string
+): Promise<ForgotPasswordResponse> => {
+  return api.auth.forgotPassword({ identifier });
+};
+
+export const performPasswordReset = async (
+  token: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> => {
+  return api.auth.resetPassword({ token, newPassword });
+};
+
+/**
+ * React hook for consuming and reacting to auth state.
+ */
+export function useAuth() {
+  const [user, setUser] = useState<UserAccount | null>(() => getCurrentUser());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkMe = async () => {
+      try {
+        const dto = await api.auth.me();
+        if (isMounted) {
+          if (dto && dto.authenticated) {
+            const acc = userDtoToAccount(dto);
+            setUser(acc);
+            setCurrentUser(acc);
+          } else {
+            setUser(null);
+            setCurrentUser(null);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          // If session is unauthenticated, preserve local cache or clear
+          const cached = getCurrentUser();
+          setUser(cached);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    checkMe();
+
+    const handleAuthChange = () => {
+      setUser(getCurrentUser());
+    };
+
+    window.addEventListener('payresolve_auth_changed', handleAuthChange);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('payresolve_auth_changed', handleAuthChange);
+    };
+  }, []);
+
+  return {
+    user,
+    loading,
+    login: authenticateUser,
+    logout: logoutUser,
+    register: registerUser,
+    requestPasswordReset,
+    performPasswordReset,
+  };
+}

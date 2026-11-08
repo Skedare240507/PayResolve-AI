@@ -30,7 +30,7 @@ These rules apply to every contributor and every AI coding assistant working in 
 - Controllers are thin: validate, call a service, map to a DTO. No business logic in controllers.
 - Entities are never returned from the API. Use DTO records.
 
-## 3. Backend rules (Java 21, Spring Boot 4.1.1)
+## 3. Backend rules (Java 21, Spring Boot 4.1.x)
 
 - Constructor injection only. No field injection, no `@Autowired` on fields.
 - Use records for DTOs and value objects; `final` by default.
@@ -105,7 +105,7 @@ These rules apply to every contributor and every AI coding assistant working in 
 - Public repository with a visible open-source license (MIT or Apache-2.0).
 - Project must meaningfully use both PayPal and AI. Keep both visible in the README and the video.
 - Demo video: under 3 minutes, public on YouTube, no copyrighted music, no third-party trademarks or logos beyond the sponsor tools used.
-- Disclose the tools and services used (PayPal Sandbox, AG Grid, Render, any LLM provider, libraries).
+- Disclose the tools and services used (PayPal Sandbox, AG Studio / AG Grid, Render, Supabase, Google Gemini / Spring AI, APIMatic, Postman).
 - The project must be new work for this hackathon. Do not reuse code from earlier projects without stating it in the README and checking the rules.
 - Submit with a time buffer; confirm the Devpost submission page shows "submitted".
 

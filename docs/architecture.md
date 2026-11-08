@@ -38,21 +38,21 @@ flowchart LR
 | Frontend | React 19 + TypeScript (strict) + Vite | |
 | Styling | Tailwind CSS v4 | CSS-first config (`@import "tailwindcss"`, `@theme`), `@tailwindcss/vite` plugin |
 | Data fetching | TanStack Query, React Router | |
-| Grid | AG Grid Community | Exception queue; sponsor prize target |
+| Grid | AG Grid Community / AG Studio | Exception queue; AG Grid sponsor prize target |
 | Graph | `@xyflow/react` (React Flow) | Evidence graph |
 | Validation | Zod (UI forms), Bean Validation (API) | |
 | Tests | JUnit 5, Testcontainers, WireMock (PayPal stubs), Vitest, Testing Library, Playwright (one smoke path) | |
 | Tooling | Postman collection, ngrok or Cloudflare Tunnel (dev), Docker Compose, GitHub Actions | |
-| Hosting | Render: Docker web service (API), static site (UI), managed Postgres | Sponsor prize target |
+| Hosting | Render: Docker web service (API), static site (UI) | Paid via hackathon credits with free-plan fallback; sponsor prize target |
 
-Optional only if time remains: Bryntum timeline for the case timeline, APIMatic for generating an SDK from the OpenAPI spec.
+Partner targets: PayPal, APIMatic Context Plugin, AG Studio (AG Grid prize), Render, Postman. (Skipping Bryntum, Elastic, Zapier, Astropods, KERNEL, Channel3).
 
 ## 4. Repository layout
 
 ```
 payresolve/
   backend/               Spring Boot app (Maven)
-  frontend/              Vite + React + TS + Tailwind v4
+  frontend/              Vite + React + TS + Tailwind v4 (built by teammate; mock data & localStorage auth; wiring to API)
   docs/                  architecture.md memory.md phases.md prd.md rules.md
   infra/                 docker-compose.yml, render.yaml
   postman/               collection + environment (no secrets)
@@ -108,6 +108,9 @@ sequenceDiagram
 
 Rules: persist before processing; a duplicate event id inserts nothing and returns 200; processing is safe to retry; out-of-order events are tolerated by re-reading state from PayPal when needed.
 
+For local development and testing with real PayPal Sandbox webhooks, expose the backend via Cloudflare Tunnel:
+`cloudflared tunnel --url http://localhost:8080`, set `APP_PUBLIC_URL=https://<tunnel>.trycloudflare.com`, and register `https://<tunnel>.trycloudflare.com/api/webhooks/paypal` as the webhook URL with `PAYPAL_WEBHOOK_ID` in `.env`.
+
 ### 6.3 Detection
 Detectors run after each processed event and on a schedule. Each detector is a pure function over a snapshot `(paypalState, shopState, events)` and returns zero or more findings. A finding opens or updates a case, keyed by `(caseType, paypalOrderId)` so reruns do not create duplicates.
 
@@ -152,20 +155,32 @@ Each node carries `source` (PAYPAL | SHOP | SYSTEM), `observedAt`, `externalId`,
 
 | Table | Key columns |
 |---|---|
-| `webhook_events` | id, paypal_event_id (unique), event_type, resource_id, raw_body, headers_json, verified, status, attempts, received_at, processed_at, last_error |
-| `shop_orders` | id, paypal_order_id, status, total_minor, currency, customer_label, created_at |
-| `payments` | id, shop_order_id, paypal_capture_id, amount_minor, currency, status, captured_at |
-| `refunds` | id, payment_id, paypal_refund_id, amount_minor, status, source (PAYPAL/SHOP) |
+| `webhook_events` | id, paypal_event_id (unique), event_type, resource_id, raw_body, headers_json, verified, status, attempts, delivery_count, received_at, last_received_at, event_created_at, custom_id, paypal_order_id, processed_at, last_error |
+| `shop_orders` | id, paypal_order_id, status, total_minor, currency, customer_label, created_at, updated_at (CHECK `total_minor >= 0`) |
+| `shop_order_items` | id, shop_order_id (FK), product_id (FK), quantity (CHECK `quantity > 0`), unit_price_minor (CHECK `unit_price_minor >= 0`) |
+| `payments` | id, shop_order_id, paypal_capture_id, amount_minor, currency, status, captured_at (CHECK `amount_minor >= 0`) |
+| `refunds` | id, payment_id, paypal_refund_id, amount_minor, status, source (PAYPAL/SHOP) (CHECK `amount_minor >= 0`) |
 | `shipments` | id, shop_order_id, carrier, tracking_ref, status, delivered_at |
-| `cases` | id, type, status, severity, paypal_order_id, shop_order_id, opened_at, resolved_at |
+| `cases` | id (`PR-xxxx` from `case_number_seq`), type, status, severity, paypal_order_id, shop_order_id, opened_at, resolved_at |
 | `case_evidence` | id, case_id, kind, source, external_id, payload_json, observed_at |
 | `investigations` | id, case_id, status, report_json, model, started_at, finished_at |
 | `investigation_steps` | id, investigation_id, tool, args_json, result_digest, started_at, ms |
 | `proposed_actions` | id, case_id, type, payload_json, idempotency_key (unique), status, proposed_by, decided_by, decided_at |
-| `audit_log` | id, at, actor, action, subject_type, subject_id, details_json (append-only) |
+| `audit_log` | id, at, actor, action, subject_type, subject_id, details_json (append-only via `trg_audit_log_immutable`) |
+| `products` | id, name, description, price_minor, currency, stock |
+| `demo_fault_switches` | id, fail_webhook_handler, drop_webhook, alter_order_total, duplicate_delivery, updated_at |
+| `users` | id, username (unique), email, password_hash, role, created_at, updated_at |
+| `password_reset_tokens` | id, user_id, token (unique), expires_at, used_at, created_at |
+| `benchmark_runs` | id, run_at, total_cases, passed_cases, precision_pct, recall_pct, avg_duration_ms, results_json |
+| `keepalive` | id, pinged_at |
 
-Money is stored as `BIGINT` minor units plus an ISO currency code. No floats anywhere.
-
+### Hardening, Sequences, and Row Level Security (V5)
+- **Sequence Generation:** `case_number_seq` generates sequential IDs formatted as `PR-0001`, `PR-0002`...
+- **Delivery Counting:** Webhook duplicates increment `delivery_count` and refresh `last_received_at` without re-executing business effects.
+- **Audit Immutability:** Trigger `trg_audit_log_immutable` strictly forbids any `UPDATE` or `DELETE` on `audit_log`.
+- **Database-Level Check Constraints:** Negative amounts are strictly prevented via `chk_shop_orders_total`, `chk_payments_amount`, and `chk_refunds_amount`.
+- **Row-Level Security (RLS) Lockdown:** RLS is enabled on all tables (`rowsecurity = true`). Default table grants are revoked from `anon` and `authenticated`; only `keepalive` allows SELECT/INSERT for external ping healthchecks.
+- **Precision:** Money is stored as `BIGINT` minor units plus an ISO currency code. No floats anywhere.
 ## 9. API surface (all under `/api`)
 
 | Endpoint | Purpose |
@@ -220,17 +235,17 @@ Structured JSON logs with `caseId`, `eventId`, `paypalOrderId` in MDC; Actuator 
 - Benchmark: 15 to 20 seeded cases with expected case types and expected cited evidence; run produces precision/recall and time-to-cause numbers stored in `benchmark_runs`.
 - E2E: one Playwright smoke path: paid-not-marked case, investigate, approve action.
 
-## 15. Sponsor tool mapping
+## 15. Sponsor & partner tool mapping
 
 | Tool | Where it earns its place |
 |---|---|
-| AG Grid | Exception queue (filters, sorting, severity, SLA) |
-| Render | Hosting for API, UI and Postgres |
-| Postman | Collection for the PayPal flow and webhook replays |
-| Bryntum (optional) | Case timeline |
-| APIMatic (optional) | SDK or docs generated from the OpenAPI spec |
+| PayPal | Sandbox Orders v2, Captures, Webhooks, and Disputes |
+| AG Grid / AG Studio | Exception queue (filters, sorting, severity, SLA); AG Grid prize target |
+| Render | Hosting for backend Docker web service and frontend static site (paid via hackathon credits with free-plan fallback) |
+| Postman | Collection for the PayPal flow, fault scenarios, and webhook replays |
+| APIMatic | APIMatic Context Plugin for API documentation / SDK context |
 
-Everything else is skipped on purpose.
+Skipped sponsors/partners: Bryntum, Elastic, Zapier, Astropods, KERNEL, Channel3.
 
 ## 16. Decisions and trade-offs
 

@@ -1,55 +1,135 @@
+# ==============================================================================
+# PayResolve AI — Render Blueprint Infrastructure Specification
+# ==============================================================================
+# Target: Render Web Services (Docker API + Static Site UI)
+# Database: Supabase PostgreSQL Session Pooler (port 5432, managed outside Render)
+# Plan: free — switch to starter only after hackathon credits are applied.
+#
+# SAME-ORIGIN STRATEGY
+# The UI static site rewrites /api/* and /actuator/* to the API's public https
+# URL so browsers always talk to one origin. This keeps the session cookie working
+# without any SameSite or CORS tricks. VITE_API_BASE_URL is therefore NOT set;
+# frontend/src/lib/api.ts falls back to a relative path when the env var is absent.
+#
+# If Render assigns the API a name other than "payresolve-api", update the
+# rewrite destination URLs in the UI routes section below.
+# ==============================================================================
+
 services:
-  # PayResolve API Service
+  # ----------------------------------------------------------------------------
+  # PayResolve Backend API (Spring Boot 4.1.x on Temurin 21 Docker Web Service)
+  # ----------------------------------------------------------------------------
   - type: web
     name: payresolve-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    # plan: free
+    # Uncomment and change to "starter" only after hackathon credits are applied.
+    # Free web services sleep after ~15 min idle; the render-health-ping workflow
+    # keeps the instance warm during the demo/judging window.
+    plan: free
     region: oregon
+    autoDeployTrigger: checksPass
     healthCheckPath: /actuator/health
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: payresolve-db
-          property: connectionString
+      # -- Safe defaults (committed in plain text) --
+      - key: SERVER_PORT
+        value: "8080"
+      # Render's internal PORT must also be 8080 so the platform knows which port
+      # the container listens on. The app binds to SERVER_PORT; both must match.
+      - key: PORT
+        value: "8080"
+      - key: DEMO_MODE
+        value: "true"
+      - key: SESSION_TIMEOUT
+        value: 30m
+      - key: FLYWAY_ENABLED
+        value: "true"
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
+      # AI_PROVIDER must be "groq" to match LlmRouter: Groq primary text,
+      # Gemini multimodal, fallback to each other. See LlmRouter.java.
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: OPERATOR_USERNAME
+        value: operator
+      - key: VIEWER_USERNAME
+        value: viewer
+      - key: PAYPAL_USE_SYNTHETIC_DISPUTES
+        value: "false"
+
+      # -- Full https URLs — set these in the Render dashboard after both
+      #    services are live. They cannot be derived automatically because the
+      #    "host" property from fromService has no https:// prefix.
+      - key: FRONTEND_ORIGIN
+        # Set to the full UI URL, e.g. https://payresolve-ui.onrender.com
+        sync: false
+      - key: APP_PUBLIC_URL
+        # Set to the full API URL, e.g. https://payresolve-api.onrender.com
+        sync: false
+
+      # -- Secrets — set in the Render dashboard; never committed --
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
       - key: PAYPAL_CLIENT_ID
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: PAYPAL_WEBHOOK_ID
         sync: false
-      - key: AI_PROVIDER
-        value: openai
-      - key: AI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: AI_MODEL
-        value: gpt-4o-mini
-      - key: OPERATOR_USERNAME
-        value: operator
+      - key: GROQ_API_KEY
+        sync: false
       - key: OPERATOR_PASSWORD
         sync: false
       - key: VIEWER_PASSWORD
         sync: false
 
-  # PayResolve Frontend UI
+  # ----------------------------------------------------------------------------
+  # PayResolve Frontend UI (Vite + React 19 + Tailwind CSS v4 Static Site)
+  # ----------------------------------------------------------------------------
   - type: web
     name: payresolve-ui
     runtime: static
-    buildCommand: cd frontend && npm install && npm run build
+    buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
-    plan: free
     region: oregon
     routes:
+      # Proxy /api/* and /actuator/* to the API service so the browser only
+      # talks to one origin (payresolve-ui.onrender.com). This keeps the session
+      # cookie working without SameSite=None or CORS pre-flight for auth calls.
+      # IMPORTANT: If Render gives the API a different name, update the destination
+      # URLs below to match the actual https URL Render assigns.
+      - type: rewrite
+        source: /api/*
+        destination: https://payresolve-api.onrender.com/api/:splat
+      - type: rewrite
+        source: /actuator/*
+        destination: https://payresolve-api.onrender.com/actuator/:splat
+      # SPA fallback — must come after the API rewrites
       - type: rewrite
         source: /*
         destination: /index.html
-
-databases:
-  - name: payresolve-db
-    plan: free
-    region: oregon
-    databaseName: payresolve
-    user: payresolve_user
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # VITE_AG_LICENSE: AG Studio license key — set in Render dashboard.
+      # NOTE: This value ends up in the browser bundle (Vite inlines VITE_* vars).
+      # It is a trial/enterprise license key, not a backend secret, but treat it
+      # as non-public. Without it the Operations page shows a license notice;
+      # all other pages continue to work normally.
+      - key: VITE_AG_LICENSE
+        sync: false
+      # VITE_API_BASE_URL is intentionally NOT set.
+      # frontend/src/lib/api.ts falls back to '' (relative path) when unset,
+      # so all /api/* calls go to the same origin and are rewritten by Render.

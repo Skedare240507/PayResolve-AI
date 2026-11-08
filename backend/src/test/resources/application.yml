@@ -1,19 +1,82 @@
-# Test configuration: disable external database dependency for unit contextLoad test
+# Safe test-only settings with no secrets and no placeholders needing values.
+# Committed so CI passes without the real application.yml.
 spring:
+  application:
+    name: payresolve-test
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: create-drop
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: always
+  ai:
+    google:
+      genai:
+        api-key: dummy-test-api-key
+        chat:
+          options:
+            model: gemini-2.0-flash
+          enabled: false
 
-paypal:
-  base-url: https://api-m.sandbox.paypal.com
-  client-id: test_client_id
-  client-secret: test_client_secret
-  webhook-id: test_webhook_id
+server:
+  port: 0
+  servlet:
+    session:
+      timeout: 30m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+payresolve:
+  public-url: http://localhost:8080
+  demo-mode: true
+  session-timeout: 30m
+  cors:
+    allowed-origins: http://localhost:5173
+  ingest:
+    worker-enabled: false
+    worker-interval-ms: 10000
+    max-attempts: 3
+    initial-backoff-ms: 50
+  supabase:
+    url: https://test-ref.supabase.co
+    anon-key: test-anon-key
+  paypal:
+    base-url: https://api-m.sandbox.paypal.com
+    client-id: test_client_id
+    client-secret: test_client_secret
+    webhook-id: test_webhook_id
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+    use-synthetic-disputes: false
+  ai:
+    provider: rules
+    groq:
+      api-key: ""
+      model: llama-3.3-70b-versatile
+      base-url: http://localhost:8089
+    gemini:
+      api-key: ""
+      model: gemini-2.0-flash
+  auth:
+    operator-username: operator
+    operator-password: test_operator_password
+    viewer-username: viewer
+    viewer-password: test_viewer_password

@@ -1,6 +1,6 @@
 # PayResolve — Product Requirements Document
 
-Status: v1.0 | Owner: Rohan | Target: PayPal AI Hackathon, deadline 12:00 pm PST, 12 Nov 2026 (about 1:30 am IST, 13 Nov)
+Status: v1.1 | Owner: Rohan | Target: PayPal AI Hackathon, deadline 12:00 pm PST, 12 Nov 2026 (internal submit: 12 Nov 6:00 pm IST; feature freeze: end of 10 Nov)
 
 ## 1. One-liner
 
@@ -133,7 +133,7 @@ Open a broken transaction and see one connected map of everything that touched i
 - Every claim cites record ids; the verifier enforces it.
 - The model is told to answer `CAUSE_NOT_DETERMINED` rather than guess.
 - Low temperature; step cap and timeout; all tool calls logged.
-- Provider and model are configuration, not code.
+- Provider and model are configuration, not code (default: Google Gemini free tier via Spring AI).
 
 ## 8. Non-functional requirements
 
@@ -157,7 +157,7 @@ Open a broken transaction and see one connected map of everything that touched i
 | Innovation | Provenance and safe actions instead of a score or a chatbot |
 | Presentation | One story, under 3 minutes, shown working |
 
-Sponsor targets: AG Grid, Render. Optional: Bryntum, APIMatic. Optional theme tie-in: agent-initiated order scenario (F-scenario 6).
+Partner & prize targets: PayPal, APIMatic Context Plugin, AG Studio (AG Grid prize), Render (paid via hackathon credits, free-plan fallback), Postman. (Skipping: Bryntum, Elastic, Zapier, Astropods, KERNEL, Channel3). Optional theme tie-in: agent-initiated order scenario (F-scenario 6).
 
 Submission requirements: public repo with a visible open-source license; README with setup and run steps or a hosted demo; text description; tools used; YouTube demo under 3 minutes, no copyrighted music or third-party trademarks.
 
@@ -198,7 +198,4 @@ Submission requirements: public repo with a visible open-source license; README 
 
 ## 13. Open questions
 
-- Which LLM provider and model will be used for the demo (cost, rate limits)?
-- Can the Sandbox Disputes API be exercised with default scopes?
-- Which license: MIT or Apache-2.0?
-- Does the team want Bryntum, or is the graph plus a simple timeline enough?
+- Can the Sandbox Disputes API be exercised with default scopes? (Fall back to synthetic labelled fixtures if not)

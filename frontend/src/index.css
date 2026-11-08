@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @layer base {
   /* Custom scrollbar styling */
   ::-webkit-scrollbar {
@@ -7,37 +9,273 @@
     height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: #0f172a;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: #cbd5e1;
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+    background: #94a3b8;
+  }
+  html.dark ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+  }
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
   }
 
   * {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #0f172a;
-  background-color: #ffffff;
-  overflow-x: hidden;
+  background-color: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ensure no hover effects as requested: "no hovering features" */
-button, a {
-  transition: none !important;
+html.dark, html.dark body {
+  color: #f1f5f9;
+  background-color: #080c14;
+}
+
+/* Transitions with prefers-reduced-motion and press scale per design specification */
+@media (prefers-reduced-motion: no-preference) {
+  button, a {
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease, transform 150ms ease;
+  }
+  button:active, a:active {
+    transform: scale(0.97);
+  }
 }
 
 code, kbd, samp, pre {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace !important;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ==========================================================================
+   AG Grid Quartz Dark Mode Overrides & Precision Theming
+   ========================================================================== */
+html.dark .ag-theme-quartz,
+html.dark .ag-theme-quartz-dark,
+.dark .ag-theme-quartz,
+.dark .ag-theme-quartz-dark {
+  --ag-background-color: #0e1522 !important;
+  --ag-data-background-color: #0e1522 !important;
+  --ag-wrapper-background-color: #0e1522 !important;
+  --ag-pinned-row-background-color: #0e1522 !important;
+  --ag-pinned-source-row-background-color: #0e1522 !important;
+  --ag-foreground-color: #f1f5f9 !important;
+  --ag-header-background-color: #0e1522 !important;
+  --ag-header-foreground-color: #94a3b8 !important;
+  --ag-border-color: #1e293b !important;
+  --ag-row-border-color: #1e293b !important;
+  --ag-odd-row-background-color: #0e1522 !important;
+  --ag-row-hover-color: #141f33 !important;
+  --ag-selected-row-background-color: #1a2a47 !important;
+  --ag-modal-overlay-background-color: rgba(8, 12, 20, 0.8) !important;
+  --ag-control-panel-background-color: #0e1522 !important;
+  --ag-subheader-background-color: #0e1522 !important;
+  --ag-sub-row-border-color: #1e293b !important;
+  --ag-input-focus-border-color: #3b82f6 !important;
+  --ag-checkbox-checked-color: #3b82f6 !important;
+  --ag-range-selection-border-color: #3b82f6 !important;
+  --ag-secondary-foreground-color: #94a3b8 !important;
+  --ag-disabled-foreground-color: #475569 !important;
+  --ag-font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif !important;
+  background-color: #0e1522 !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .ag-root-wrapper,
+html.dark .ag-root-wrapper-body,
+html.dark .ag-root,
+html.dark .ag-body,
+html.dark .ag-body-viewport,
+html.dark .ag-center-cols-viewport,
+html.dark .ag-center-cols-container,
+html.dark .ag-grid-scrolling-rows,
+html.dark .ag-grid-pinned-top-rows,
+html.dark .ag-grid-pinned-bottom-rows,
+html.dark .ag-grid-pinned-top-rows-container,
+html.dark .ag-grid-pinned-bottom-rows-container,
+html.dark .ag-sticky-top,
+html.dark .ag-sticky-bottom,
+html.dark .ag-body-horizontal-scroll-viewport,
+html.dark .ag-body-vertical-scroll-viewport,
+html.dark .ag-header,
+html.dark .ag-row {
+  background-color: #0e1522 !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .ag-header-cell-label,
+html.dark .ag-header-cell-text {
+  color: #94a3b8 !important;
+  font-weight: 500 !important;
+}
+
+html.dark .ag-cell {
+  color: #f1f5f9 !important;
+  border-bottom-color: #1e293b !important;
+}
+
+html.dark .ag-row-hover {
+  background-color: #141f33 !important;
+}
+
+html.dark .ag-paging-panel {
+  background-color: #0e1522 !important;
+  border-top-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+/* ==========================================================================
+   AG Studio Dark Mode Overrides
+   ========================================================================== */
+html.dark .ag-studio,
+html.dark .ag-studio-root,
+html.dark .ag-studio-root-inner,
+html.dark .ag-studio-root-panel-container,
+html.dark .ag-studio-layout,
+html.dark .ag-studio-layout-canvas,
+html.dark .ag-studio-layout-content-container,
+html.dark .ag-studio-panel,
+html.dark .ag-studio-panel-search-container,
+html.dark .ag-studio-filters-panel,
+html.dark .ag-studio-panel-search-container-contents {
+  background-color: #0b101a !important;
+  color: #f1f5f9 !important;
+  border-color: #1e293b !important;
+}
+
+html.dark .ag-studio-panel-header,
+html.dark .ag-studio-panel-title {
+  color: #f1f5f9 !important;
+}
+
+html.dark .ag-studio-panel-search-container-contents input {
+  background-color: #131b26 !important;
+  color: #f1f5f9 !important;
+  border-color: #1e293b !important;
+}
+
+/* ==========================================================================
+   React Flow Dark Controls
+   ========================================================================== */
+html.dark .react-flow__controls {
+  background-color: #131b26 !important;
+  border-color: #1e293b !important;
+}
+
+html.dark .react-flow__controls-button {
+  background-color: #131b26 !important;
+  border-bottom-color: #1e293b !important;
+  fill: #94a3b8 !important;
+  border-color: #1e293b !important;
+}
+
+html.dark .react-flow__controls-button:hover {
+  background-color: #1c2738 !important;
+  fill: #f1f5f9 !important;
+}
+
+html.dark .react-flow__controls-button svg {
+  fill: inherit !important;
+}
+
+/* ==========================================================================
+   Phase 4 Motion & Animation Suite (View Transitions & Keyframes)
+   ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+@keyframes checkDraw {
+  0% {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes routeFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes staggerItem {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-check-draw {
+  animation: checkDraw 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-spin-slow {
+  animation: spinSlow 1.33s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.route-fade-slide {
+  animation: routeFadeSlide 120ms ease-out forwards;
+}
+
+.animate-stagger-item {
+  animation: staggerItem 220ms ease-out forwards;
+  animation-delay: calc(var(--stagger-i, 0) * 35ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin-slow,
+  .animate-check-draw,
+  .route-fade-slide,
+  .animate-stagger-item {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

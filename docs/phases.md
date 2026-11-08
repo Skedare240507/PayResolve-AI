@@ -2,7 +2,7 @@
 
 Window: Mon 2 Nov to Thu 12 Nov 2026 (11 days). Hard deadline: 12:00 pm PST, 12 Nov = about 1:30 am IST, 13 Nov.
 **Target submit time: Thu 12 Nov, 6:00 pm IST (4:30 am PST) at the latest. Do not plan to use the last night.**
-Feature freeze: Tue 10 Nov end of day. Only bug fixes, docs and video after that.
+Feature freeze: end of 10 Nov. Only bug fixes, docs and video after that. Current date: 7 Nov. Hard deadline: 12 Nov 12:00 pm PST (submit by 12 Nov 6:00 pm IST).
 
 ## Phase overview
 
@@ -20,14 +20,14 @@ Feature freeze: Tue 10 Nov end of day. Only bug fixes, docs and video after that
 
 | Day | Date | Plan | Done when |
 |---|---|---|---|
-| 1 | Mon 2 Nov | Scaffold backend (Boot 4.1.1, Java 21, Flyway, Postgres via Compose) and frontend (Vite, React, TS strict, Tailwind v4); GitHub repo with LICENSE; CI builds both; sandbox app, credentials, Postman collection | `./mvnw verify` and `npm run build` green in CI |
+| 1 | Mon 2 Nov | Scaffold backend (target Boot 4.1.x, currently 3.4.2; fix in next step) and frontend (built by teammate; mock data + localStorage auth; to wire to backend); GitHub repo with LICENSE; CI builds; sandbox app, credentials, Postman | `./mvnw verify` and `npm run build` green in CI |
 | 2 | Tue 3 Nov | PayPal client: token, create order, capture; tunnel up; webhook endpoint stub receives a real event; **check Disputes API access** | A real `PAYMENT.CAPTURE.COMPLETED` is logged |
-| 3 | Wed 4 Nov | Signature verification; `webhook_events` inbox with unique event id; worker with SKIP LOCKED; deploy skeleton to Render (API, UI, Postgres) | Duplicate event is ignored; app reachable on a public URL |
+| 3 | Wed 4 Nov | Signature verification; `webhook_events` inbox with unique event id; worker with SKIP LOCKED; deploy skeleton to Render (API, UI; Supabase free Postgres via Session pooler + keepalive Action) | Duplicate event is ignored; app reachable on a public URL |
 | 4 | Thu 5 Nov | Demo shop (products, checkout UI, order status); `AWAITING_CONFIRMATION` to `PAID` on processed event; fault switches | Full checkout works; a fault leaves the order unpaid |
 | 5 | Fri 6 Nov | Case model; detectors `PAID_NOT_MARKED`, `AMOUNT_MISMATCH`, `DUPLICATE_EVENT`; replay test | Table-driven detector tests green |
-| 6 | Sat 7 Nov | Seed script for scenarios; `REFUND_MISMATCH`, `ORPHAN_CAPTURE` if time; AG Grid queue | Queue shows seeded and live cases |
+| 6 | Sat 7 Nov | Current checkpoint (7 Nov): align docs & decisions; prepare Boot 4.1.x upgrade; wire Supabase session pooler; begin wiring frontend to backend; AG Grid queue | Queue shows seeded and live cases |
 | 7 | Sun 8 Nov | Evidence builder; graph endpoint; React Flow graph with missing-link nodes; timeline | Case page tells the story without AI |
-| 8 | Mon 9 Nov | Investigator: Spring AI tools, structured report, verifier, step log; UI panel; cached demo investigations | Investigate works on all P0 cases |
+| 8 | Mon 9 Nov | Investigator: Spring AI tools (Google Gemini free tier; configurable by env vars), structured report, verifier, step log; UI panel; cached demo investigations | Investigate works on all P0 cases |
 | 9 | Tue 10 Nov | Actions: propose, approve, execute, audit; login and viewer role; **FEATURE FREEZE at end of day** | End-to-end demo path runs twice in a row |
 | 10 | Wed 11 Nov | Benchmark run and numbers; README; screenshots; Devpost text; record video (take 1); fix bugs | README run steps verified from a clean clone |
 | 11 | Thu 12 Nov | Final video, final deploy check, submit by 6:00 pm IST; keep buffer for upload and form issues | Submission confirmed on Devpost |
@@ -36,7 +36,7 @@ Feature freeze: Tue 10 Nov end of day. Only bug fixes, docs and video after that
 
 ### Phase 0: Setup and de-risk
 - Repo with `backend/`, `frontend/`, `docs/`, `infra/`, MIT or Apache-2.0 LICENSE, `.env.example`.
-- Spring Initializr: Web, Validation, Security, Data JPA (or JDBC), Flyway, PostgreSQL, Actuator, Spring AI starter for the chosen provider.
+- Spring Initializr / pom: Web, Validation, Security, Data JPA, Flyway, PostgreSQL (Supabase session pooler), Actuator, Spring AI starter (Google Gemini free tier default, configurable via env vars).
 - Vite React TS template; Tailwind v4 via `@tailwindcss/vite`; TanStack Query; React Router.
 - PayPal Sandbox: app, buyer and merchant accounts, webhook registration, Postman collection.
 - **De-risk checklist:** token works, order and capture work, webhook reaches the public URL, Disputes API reachable or fixtures decided.
@@ -67,7 +67,7 @@ Feature freeze: Tue 10 Nov end of day. Only bug fixes, docs and video after that
 
 ## Cut list (cut from the top when behind)
 
-1. Bryntum, APIMatic
+1. Bryntum, Elastic, Zapier, Astropods, KERNEL, Channel3 (all skipped). APIMatic Context Plugin retained.
 2. Agent-initiated order scenario
 3. `DISPUTE_EVIDENCE_GAP` and the checklist
 4. `REFUND_MISMATCH` and `ORPHAN_CAPTURE` detectors

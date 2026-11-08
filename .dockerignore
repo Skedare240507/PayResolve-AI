@@ -1,0 +1,12 @@
+**/target/
+**/node_modules/
+**/dist/
+.git/
+.gitignore
+*.md
+.env
+.env.*
+.postgres-data/
+scratch/
+design/
+
