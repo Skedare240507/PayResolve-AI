@@ -1,5 +1,7 @@
 package com.payresolve;
 
+import com.payresolve.common.DatasourceValidator;
+import com.payresolve.common.SensitiveDataMasker;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.springframework.boot.SpringApplication;
@@ -16,7 +18,7 @@ public class PayresolveApplication {
 
     public static void main(String[] args) {
         System.setProperty("java.net.preferIPv4Stack", "true");
-        normalizeJdbcUrlFromEnv();
+        validateAndConfigureDatasourceFromEnv();
         runFlywayMigrationIfConfigured();
         for (String arg : args) {
             if ("--migrate-only".equals(arg)) {
@@ -27,7 +29,15 @@ public class PayresolveApplication {
         SpringApplication.run(PayresolveApplication.class, args);
     }
 
-    private static void normalizeJdbcUrlFromEnv() {
+    private static void validateAndConfigureDatasourceFromEnv() {
+        // 1. Check system environment variable DATABASE_URL first
+        String envDbUrl = System.getenv("DATABASE_URL");
+        if (envDbUrl != null && !envDbUrl.isBlank()) {
+            DatasourceValidator.validate(envDbUrl);
+            SensitiveDataMasker.registerSensitiveValue(envDbUrl);
+        }
+
+        // 2. Check local .env file if running in local development
         Path envFile = Path.of("../.env");
         if (!Files.exists(envFile)) {
             envFile = Path.of(".env");
@@ -45,36 +55,24 @@ public class PayresolveApplication {
                         if (val.startsWith("'") && val.endsWith("'")) {
                             val = val.substring(1, val.length() - 1);
                         }
-                        for (String pfx : List.of("jdbc:postgresql://", "postgresql://")) {
-                            if (val.startsWith(pfx)) {
-                                val = val.substring(pfx.length());
-                                break;
-                            }
-                        }
-                        String queryParams = "";
-                        if (val.contains("?")) {
-                            int qIdx = val.indexOf("?");
-                            queryParams = val.substring(qIdx);
-                            val = val.substring(0, qIdx);
-                        }
-                        if (val.contains("@")) {
-                            val = val.substring(val.lastIndexOf("@") + 1);
-                        }
-                        String jdbcUrl = "jdbc:postgresql://" + val + queryParams;
-                        if (!jdbcUrl.contains("sslmode=")) {
-                            jdbcUrl += (jdbcUrl.contains("?") ? "&" : "?") + "sslmode=require";
-                        }
-                        System.setProperty("spring.datasource.url", jdbcUrl);
+                        DatasourceValidator.validate(val);
+                        SensitiveDataMasker.registerSensitiveValue(val);
+                        System.setProperty("spring.datasource.url", val);
                     }
                     if (line.startsWith("DB_USER=")) {
                         String user = line.substring("DB_USER=".length()).trim().replace("\"", "").replace("'", "");
+                        SensitiveDataMasker.registerSensitiveValue(user);
                         System.setProperty("spring.datasource.username", user);
                     }
                     if (line.startsWith("DB_PASSWORD=")) {
                         String pass = line.substring("DB_PASSWORD=".length()).trim().replace("\"", "").replace("'", "");
+                        SensitiveDataMasker.registerSensitiveValue(pass);
                         System.setProperty("spring.datasource.password", pass);
                     }
                 }
+            } catch (IllegalStateException e) {
+                // Re-throw validation errors immediately to fail fast
+                throw e;
             } catch (Exception ignored) {}
         }
     }
@@ -109,12 +107,12 @@ public class PayresolveApplication {
                 Flyway flyway = Flyway.configure()
                     .dataSource(url, user, pass)
                     .locations("classpath:db/migration")
-                    .baselineOnMigrate(true)
+                    .baselineOnMigrate(false)
                     .load();
                 MigrateResult result = flyway.migrate();
                 System.out.println("Flyway migration completed successfully: " + result.migrationsExecuted + " migrations executed.");
             } catch (Exception e) {
-                System.err.println("Flyway migration exception: " + e.getMessage());
+                System.err.println("Flyway migration exception: " + SensitiveDataMasker.mask(e.getMessage()));
             }
         }
     }
