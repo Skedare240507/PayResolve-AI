@@ -291,3 +291,83 @@ html.dark .react-flow__controls-button svg {
     transform: none !important;
   }
 }
+
+/* ==========================================================================
+   AG Grid Premium Aesthetics & Design System Integration
+   ========================================================================== */
+.ag-theme-quartz,
+.ag-theme-quartz-dark {
+  --ag-font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  --ag-cell-horizontal-padding: 16px;
+  --ag-header-cell-hover-background-color: transparent;
+  border-radius: 0.75rem;
+}
+
+/* Header styling */
+.ag-theme-quartz .ag-header,
+.ag-theme-quartz-dark .ag-header {
+  border-bottom: 1px solid var(--ag-border-color) !important;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.ag-theme-quartz .ag-header-cell-label,
+.ag-theme-quartz-dark .ag-header-cell-label {
+  font-weight: 600;
+}
+
+/* Row styling with smooth hover transitions */
+.ag-theme-quartz .ag-row,
+.ag-theme-quartz-dark .ag-row {
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+  border-bottom: 1px solid var(--ag-border-color) !important;
+  cursor: pointer;
+}
+
+.ag-theme-quartz .ag-row-hover,
+.ag-theme-quartz-dark .ag-row-hover {
+  background-color: var(--ag-row-hover-color) !important;
+}
+
+/* Selected row highlight */
+.ag-theme-quartz .ag-row-selected,
+.ag-theme-quartz-dark .ag-row-selected {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+.ag-theme-quartz-dark .ag-row-selected {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+
+/* Cell alignment & vertical centering */
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz-dark .ag-cell {
+  display: flex;
+  align-items: center;
+  border-right: none !important;
+}
+
+/* Focus outline clean-up */
+.ag-theme-quartz .ag-cell:focus,
+.ag-theme-quartz .ag-cell:focus-within,
+.ag-theme-quartz-dark .ag-cell:focus,
+.ag-theme-quartz-dark .ag-cell:focus-within {
+  outline: none !important;
+  border-color: transparent !important;
+}
+
+/* Custom scrollbars inside AG Grid */
+.ag-theme-quartz .ag-body-viewport::-webkit-scrollbar,
+.ag-theme-quartz-dark .ag-body-viewport::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.ag-theme-quartz .ag-body-viewport::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.ag-theme-quartz-dark .ag-body-viewport::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
