@@ -63,7 +63,7 @@ export default function LandingPage() {
                 PayPal AI Hackathon 2026. Sandbox build.
               </p>
 
-              <h1 className="text-5xl sm:text-6xl lg:text-[76px] font-black tracking-tight leading-[1.04] text-white">
+              <h1 className="text-4xl sm:text-6xl lg:text-[76px] font-black tracking-tight leading-[1.04] text-white">
                 Customer<br />
                 says paid.<br />
                 System says<br />
