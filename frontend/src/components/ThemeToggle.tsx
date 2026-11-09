@@ -54,16 +54,16 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', varian
         onClick={handleToggle}
         title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
         aria-label="Toggle theme"
-        className={`px-3 py-1.5 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 active:scale-[0.97] text-white backdrop-blur-xs transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium ${className}`}
+        className={`px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/20 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 active:scale-[0.97] text-slate-700 dark:text-white backdrop-blur-xs transition-all cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium ${className}`}
       >
         {isDark ? (
           <>
-            <GoogleIcon name="light_mode" size={15} className="text-amber-300" />
+            <GoogleIcon name="light_mode" size={15} className="text-amber-400" />
             <span className="hidden sm:inline">Light</span>
           </>
         ) : (
           <>
-            <GoogleIcon name="dark_mode" size={15} className="text-blue-100" />
+            <GoogleIcon name="dark_mode" size={15} className="text-slate-600" />
             <span className="hidden sm:inline">Dark</span>
           </>
         )}
