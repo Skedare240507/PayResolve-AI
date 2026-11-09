@@ -345,7 +345,7 @@ export default function ExceptionQueuePage() {
         </div>
 
         {/* 4 Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Open cases</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
@@ -376,11 +376,11 @@ export default function ExceptionQueuePage() {
         </div>
 
         {/* Main Table Card */}
-        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-6 space-y-5">
+        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 space-y-5 overflow-hidden">
           
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 flex-1">
               <input
                 type="text"
                 placeholder="Search case, order or capture id"
@@ -388,45 +388,47 @@ export default function ExceptionQueuePage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full sm:w-80 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 bg-white dark:bg-[#131b26] focus:outline-none focus:ring-1 focus:ring-blue-600"
               />
-              <button
-                type="button"
-                onClick={() => setSelectedSeverity(selectedSeverity === 'All' ? 'High' : 'All')}
-                className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors ${
-                  selectedSeverity !== 'All'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                    : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                Type
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedSeverity(selectedSeverity === 'High' ? 'All' : 'High')}
-                className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors ${
-                  selectedSeverity === 'High'
-                    ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
-                    : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                Severity
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedStatus(selectedStatus === 'Open' ? 'All' : 'Open')}
-                className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors ${
-                  selectedStatus === 'Open'
-                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
-                    : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                Status
-              </button>
+              <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSeverity(selectedSeverity === 'All' ? 'High' : 'All')}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                    selectedSeverity !== 'All'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  Type
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSeverity(selectedSeverity === 'High' ? 'All' : 'High')}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                    selectedSeverity === 'High'
+                      ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  Severity
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus(selectedStatus === 'Open' ? 'All' : 'Open')}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                    selectedStatus === 'Open'
+                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  Status
+                </button>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handleExportCSV}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs self-start sm:self-auto"
+              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
             >
               Export CSV
             </button>
@@ -452,7 +454,7 @@ export default function ExceptionQueuePage() {
               {/* AG Grid Container with AG Grid Community */}
               <div
                 key={isDark ? 'grid-dark' : 'grid-light'}
-                className={`${agThemeClass} w-full h-[360px] rounded-xl overflow-hidden`}
+                className={`${agThemeClass} w-full h-[360px] sm:h-[420px] rounded-xl overflow-hidden`}
                 style={{
                   fontFamily: 'inherit',
                   '--ag-font-size': '12.5px',
@@ -484,7 +486,7 @@ export default function ExceptionQueuePage() {
               </div>
 
               {/* Pagination & Status Footer */}
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 px-1 border-t border-slate-100 dark:border-slate-800/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 px-1 border-t border-slate-100 dark:border-slate-800/60 gap-1.5 sm:gap-0">
                 <div>
                   Showing <span className="font-semibold text-slate-900 dark:text-white">{filteredRows.length}</span> of{' '}
                   <span className="font-semibold text-slate-900 dark:text-white">{pagedData?.totalElements ?? filteredRows.length}</span> cases
