@@ -120,8 +120,8 @@ export default function BenchmarkPage() {
         </div>
 
         {/* 4 Primary Metric Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <div className="bg-white dark:bg-[#0e1522] p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Detection precision</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {hasRun ? `${latest.precisionPct.toFixed(1)}%` : 'Not run'}
@@ -159,7 +159,7 @@ export default function BenchmarkPage() {
         </div>
 
         {/* Confusion Matrix Card */}
-        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 shadow-2xs space-y-4">
+        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/80">
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">Confusion Matrix &amp; Evaluation Metrics</h2>
@@ -217,7 +217,7 @@ export default function BenchmarkPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           
           {/* Latest Run Card with 18 Dots */}
-          <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-5 shadow-2xs">
+          <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">Seeded case outcomes</h2>
@@ -262,7 +262,7 @@ export default function BenchmarkPage() {
           </div>
 
           {/* 10x Replay Idempotency & Speedup Card */}
-          <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
+          <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80">
               <div className="flex items-center space-x-2">
                 <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-[#0066cc] dark:text-blue-400">
