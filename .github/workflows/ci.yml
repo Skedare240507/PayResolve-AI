@@ -184,6 +184,10 @@ jobs:
             exit 1
           fi
 
+          echo "Seeding canonical demo cases and running initial benchmark for offline API tests..."
+          curl -s -X POST http://127.0.0.1:8080/api/cases/seed
+          curl -s -X POST http://127.0.0.1:8080/api/benchmark/run
+
           echo "Running Newman offline suite..."
           npx --yes newman run postman/PayResolve.postman_collection.json \
             --folder offline \
