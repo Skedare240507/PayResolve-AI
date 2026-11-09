@@ -202,7 +202,7 @@ export default function ActionsAuditPage() {
                 return (
                   <div
                     key={act.id}
-                    className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs"
+                    className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center space-x-3">
@@ -257,7 +257,7 @@ export default function ActionsAuditPage() {
           </div>
 
           {/* Right: Audit Log Card */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
+          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">Audit log</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
