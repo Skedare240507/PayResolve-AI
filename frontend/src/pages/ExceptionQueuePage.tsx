@@ -227,21 +227,24 @@ export default function ExceptionQueuePage() {
         const val = params.value;
         if (val === 'High') {
           return (
-            <span className="px-3 py-0.5 rounded-full border border-rose-400 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs">
-              High
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-rose-300 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+              <span>High</span>
             </span>
           );
         }
         if (val === 'Medium') {
           return (
-            <span className="px-3 py-0.5 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs">
-              Medium
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <span>Medium</span>
             </span>
           );
         }
         return (
-          <span className="px-3 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs">
-            Low
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+            <span>Low</span>
           </span>
         );
       },
@@ -260,28 +263,32 @@ export default function ExceptionQueuePage() {
         const val = params.value;
         if (val === 'Open') {
           return (
-            <span className="px-3 py-0.5 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-normal">
-              Open
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-normal">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <span>Open</span>
             </span>
           );
         }
         if (val === 'Investigating') {
           return (
-            <span className="px-3 py-0.5 rounded-full border border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-xs font-normal">
-              Investigating
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-blue-300 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-normal">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+              <span>Investigating</span>
             </span>
           );
         }
         if (val === 'Proposed') {
           return (
-            <span className="px-3 py-0.5 rounded-full border border-purple-400 dark:border-purple-700 text-purple-600 dark:text-purple-400 text-xs font-normal">
-              Proposed
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-purple-300 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 text-xs font-normal">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+              <span>Proposed</span>
             </span>
           );
         }
         return (
-          <span className="px-3 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-normal">
-            Resolved
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-normal">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span>Resolved</span>
           </span>
         );
       },
@@ -344,95 +351,128 @@ export default function ExceptionQueuePage() {
           </div>
         </div>
 
-        {/* 4 Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Open cases</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              <CountUp value={statsData?.openCount ?? filteredRows.filter(r => r.status === 'Open').length} />
+          {/* 4 Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                <span>Open cases</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  <CountUp value={statsData?.openCount ?? filteredRows.filter(r => r.status === 'Open').length} />
+                </span>
+                <span className="text-emerald-500 font-medium text-xs">+2 today</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                <span>Awaiting approval</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  <CountUp value={statsData?.awaitingApprovalCount ?? filteredRows.filter(r => r.status === 'Proposed').length} />
+                </span>
+                <span className="text-xs text-slate-400">requires review</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                <span>Duplicates blocked today</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  <CountUp value={statsData?.duplicatesBlockedToday ?? 7} />
+                </span>
+                <span className="text-xs text-emerald-500">Auto-resolved</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                <span>Oldest open case</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  <CountUp
+                    value={statsData?.oldestOpenMinutes != null && statsData.oldestOpenMinutes > 0 ? statsData.oldestOpenMinutes : 38}
+                    suffix=" min"
+                  />
+                </div>
+                <span className="text-xs text-slate-400">SLA: 60m</span>
+              </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Awaiting approval</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              <CountUp value={statsData?.awaitingApprovalCount ?? filteredRows.filter(r => r.status === 'Proposed').length} />
-            </div>
-          </div>
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Duplicates blocked today</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              <CountUp value={statsData?.duplicatesBlockedToday ?? 7} />
-            </div>
-          </div>
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Oldest open case</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              <CountUp
-                value={statsData?.oldestOpenMinutes != null && statsData.oldestOpenMinutes > 0 ? statsData.oldestOpenMinutes : 38}
-                suffix=" min"
-              />
-            </div>
-          </div>
-        </div>
 
         {/* Main Table Card */}
         <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 space-y-5 overflow-hidden">
           
-          {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 flex-1">
-              <input
-                type="text"
-                placeholder="Search case, order or capture id"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-80 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 bg-white dark:bg-[#131b26] focus:outline-none focus:ring-1 focus:ring-blue-600"
-              />
-              <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedSeverity(selectedSeverity === 'All' ? 'High' : 'All')}
-                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
-                    selectedSeverity !== 'All'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  Type
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSeverity(selectedSeverity === 'High' ? 'All' : 'High')}
-                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
-                    selectedSeverity === 'High'
-                      ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  Severity
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStatus(selectedStatus === 'Open' ? 'All' : 'Open')}
-                  className={`px-3 py-1.5 rounded-full border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
-                    selectedStatus === 'Open'
-                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  Status
-                </button>
+            {/* Filter Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 flex-1">
+                <div className="relative w-full sm:w-80">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <GoogleIcon name="search" size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search case, order or capture id"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 bg-white dark:bg-[#131b26] focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  />
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSeverity(selectedSeverity === 'All' ? 'High' : 'All')}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                      selectedSeverity !== 'All'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-[#131b26]'
+                    }`}
+                  >
+                    <span>Type</span>
+                    <GoogleIcon name="expand_more" size={14} className="text-slate-400" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSeverity(selectedSeverity === 'High' ? 'All' : 'High')}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                      selectedSeverity === 'High'
+                        ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-[#131b26]'
+                    }`}
+                  >
+                    <span>Severity</span>
+                    <GoogleIcon name="expand_more" size={14} className="text-slate-400" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStatus(selectedStatus === 'Open' ? 'All' : 'Open')}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                      selectedStatus === 'Open'
+                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-[#131b26]'
+                    }`}
+                  >
+                    <span>Status</span>
+                    <GoogleIcon name="expand_more" size={14} className="text-slate-400" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
-            >
-              Export CSV
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-[#131b26] cursor-pointer shadow-2xs self-start sm:self-auto shrink-0 transition-colors"
+              >
+                <GoogleIcon name="download" size={14} className="text-slate-500 dark:text-slate-400" />
+                <span>Export CSV</span>
+              </button>
+            </div>
 
           {/* AG Grid or States */}
           {casesLoading ? (
@@ -486,13 +526,38 @@ export default function ExceptionQueuePage() {
               </div>
 
               {/* Pagination & Status Footer */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 px-1 border-t border-slate-100 dark:border-slate-800/60 gap-1.5 sm:gap-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 px-1 border-t border-slate-100 dark:border-slate-800/60 gap-2 sm:gap-0">
                 <div>
-                  Showing <span className="font-semibold text-slate-900 dark:text-white">{filteredRows.length}</span> of{' '}
+                  Showing <span className="font-semibold text-slate-900 dark:text-white">{filteredRows.length > 0 ? 1 : 0}</span> to{' '}
+                  <span className="font-semibold text-slate-900 dark:text-white">{Math.min(filteredRows.length, 7)}</span> of{' '}
                   <span className="font-semibold text-slate-900 dark:text-white">{pagedData?.totalElements ?? filteredRows.length}</span> cases
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  Real-time detection over PayPal Orders v2 & Webhook log
+                <div className="flex items-center gap-1 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    disabled
+                    className="px-2.5 py-1 rounded border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 text-xs disabled:opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900/40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="w-7 h-7 rounded bg-blue-600 text-white text-xs font-semibold flex items-center justify-center cursor-pointer shadow-xs"
+                  >
+                    1
+                  </button>
+                  <button
+                    type="button"
+                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    2
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
             </div>
