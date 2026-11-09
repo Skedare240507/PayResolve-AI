@@ -268,17 +268,21 @@ export default function CaseDetailsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Case {caseData.id}: {typeFormatted}
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Order #{caseData.shopOrderId?.replace('ORD-', '') || caseData.paypalOrderId} &middot; opened {calculateAge(caseData.openedAt)} ago &middot; {severityBadge}
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
+              <span>Order #{caseData.shopOrderId?.replace('ORD-', '') || caseData.paypalOrderId}</span>
+              <span>&middot;</span>
+              <span>opened {calculateAge(caseData.openedAt)} ago</span>
+              <span>&middot;</span>
+              {severityBadge}
             </p>
           </div>
 
-          <div className="flex items-center space-x-2.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 self-start sm:self-auto">
             {statusBadge}
-            <label className="px-3.5 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] text-xs sm:text-sm font-medium shadow-2xs cursor-pointer transition-all flex items-center space-x-1.5">
+            <label className="px-3 sm:px-3.5 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] text-xs sm:text-sm font-medium shadow-2xs cursor-pointer transition-all flex items-center space-x-1.5">
               <GoogleIcon name="attach_file" size={17} />
               <span>{uploadMutation.isPending ? 'Uploading...' : 'Add evidence'}</span>
               <input
@@ -292,7 +296,7 @@ export default function CaseDetailsPage() {
             <button
               onClick={() => investigateMutation.mutate()}
               disabled={investigateMutation.isPending}
-              className="px-5 py-2 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white text-xs sm:text-sm font-medium shadow-sm cursor-pointer transition-all disabled:opacity-70"
+              className="px-4 sm:px-5 py-2 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white text-xs sm:text-sm font-medium shadow-sm cursor-pointer transition-all disabled:opacity-70"
             >
               {investigateMutation.isPending
                 ? 'Investigating...'
@@ -307,8 +311,8 @@ export default function CaseDetailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left: Evidence Graph */}
-          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
-            <div className="flex items-center justify-between">
+          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">Evidence graph</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -317,7 +321,7 @@ export default function CaseDetailsPage() {
               </div>
 
               {/* Segmented control */}
-              <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#131b26] p-0.5 text-xs">
+              <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#131b26] p-0.5 text-xs self-start sm:self-auto">
                 <button
                   onClick={() => setActiveTab('graph')}
                   className={`px-3 py-1 rounded-md cursor-pointer transition-colors ${
@@ -397,7 +401,7 @@ export default function CaseDetailsPage() {
           </div>
 
           {/* Right: AI Investigator */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-5 shadow-2xs">
+          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
               <span className="px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal">
@@ -513,7 +517,7 @@ export default function CaseDetailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Bottom Left: Timeline */}
-          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
+          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Timeline</h2>
             
             <div className="overflow-x-auto">
@@ -553,7 +557,7 @@ export default function CaseDetailsPage() {
           </div>
 
           {/* Bottom Right: Dispute Evidence Checklist & Multimodal Attachments */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
+          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">Dispute evidence checklist</h2>
