@@ -140,6 +140,16 @@ export default function SignInPage() {
         <p className="text-xs text-slate-500 dark:text-slate-400 pt-2">
           Judges: viewer credentials are in the Devpost submission.
         </p>
+
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <Link
+            to="/"
+            className="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+          >
+            <span>&larr;</span>
+            <span>Back to landing page</span>
+          </Link>
+        </div>
       </div>
     </AuthLayout>
   );
