@@ -99,3 +99,88 @@ jobs:
 
       - name: Check env variable name consistency
         run: node scripts/check-env-names.mjs
+
+  api-tests:
+    name: API Integration Tests (Postman & Newman)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: payresolve
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare application configuration
+        run: cp backend/src/main/resources/application.yml.example backend/src/main/resources/application.yml
+
+      - name: Start PayResolve Backend
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5432/payresolve
+          DB_USER: postgres
+          DB_PASSWORD: postgres_ci_password
+          DEMO_MODE: 'true'
+          FLYWAY_ENABLED: 'true'
+          SERVER_PORT: '8080'
+          SESSION_COOKIE_SECURE: 'false'
+          PAYPAL_CLIENT_ID: mock_ci_client_id
+          PAYPAL_CLIENT_SECRET: mock_ci_secret
+          PAYPAL_WEBHOOK_ID: mock_ci_webhook_id
+          GROQ_API_KEY: mock_ci_groq_key
+          GEMINI_API_KEY: mock_ci_gemini_key
+        run: |
+          cd backend
+          chmod +x mvnw
+          nohup ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Djava.net.preferIPv4Stack=true" -B > ../backend.log 2>&1 &
+
+      - name: Wait for Backend Health
+        run: |
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "Backend is healthy!"
+              exit 0
+            fi
+            echo "Waiting for backend ($i/30)..."
+            sleep 2
+          done
+          echo "Backend failed to become healthy within 60s. Log output:"
+          cat backend.log
+          exit 1
+
+      - name: Run Postman Offline Suite with Newman
+        run: |
+          npx --yes newman run postman/PayResolve.postman_collection.json \
+            --folder offline \
+            --reporters cli,json \
+            --reporter-json-export postman-report.json
+
+      - name: Upload Newman Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postman-api-test-report
+          path: postman-report.json
+          if-no-files-found: warn
+

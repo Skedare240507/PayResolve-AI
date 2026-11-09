@@ -24,7 +24,7 @@ import java.time.Instant;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api/cases/{caseId}/attachments")
+@RequestMapping("/cases/{caseId}/attachments")
 @Tag(name = "Case Attachments", description = "Multimodal evidence upload and AI analysis")
 public class CaseAttachmentController {
 

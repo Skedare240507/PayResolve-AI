@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/agent")
+@RequestMapping("/agent")
 @Tag(name = "Operations Agent", description = "AG Studio / Operations intelligent assistant chat")
 public class AgentChatController {
 

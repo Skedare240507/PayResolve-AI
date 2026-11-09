@@ -25,8 +25,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void configurePathMatch(PathMatchConfigurer configurer) {
-        // Enforce that all @RestController endpoints live under /api
-        configurer.addPathPrefix("/api", HandlerTypePredicate.forAnnotation(RestController.class));
+        // Enforce that all PayResolve application @RestController endpoints live under /api
+        // and do not alter springdoc OpenAPI endpoints (/v3/api-docs)
+        configurer.addPathPrefix("/api",
+            HandlerTypePredicate.forAnnotation(RestController.class)
+                .and(HandlerTypePredicate.forBasePackage("com.payresolve")));
     }
 
     @Override

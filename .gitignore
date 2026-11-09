@@ -50,11 +50,12 @@ logs/
 design/
 
 # Scratch & temporary artifacts
-scratch/
-report/
-submission/
-PROJECT_REPORT.md
-sponsors.md
+/scratch/
+/report/
+/submission/
+/PROJECT_REPORT.md
+/sponsors.md
 memory.md 
 
-DEPLOYMENT.md
+/DEPLOYMENT.md
+

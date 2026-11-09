@@ -167,6 +167,27 @@ cd backend && ./mvnw verify        # needs Docker for Testcontainers
 cd frontend && npm run lint && npm run build
 ```
 
+### API tests with Postman
+
+The repository includes an API test suite in `postman/PayResolve.postman_collection.json` organized into two folders:
+
+1. **`offline`** — Automated regression and security suite (14 requests, 39 assertions). Validates actuator health, CSRF token generation, session cookies, operator authentication, VIEWER role restrictions (asserts HTTP 403 on approval mutations), exception queue, case details, durable events inbox, actions pagination, immutable audit trail, and benchmark telemetry. It requires zero external credentials and never leaks secrets.
+2. **`sandbox`** — Manual PayPal Sandbox end-to-end suite. Covers OAuth token acquisition, Orders v2 creation, buyer approval redirect, server-side capture, dispute retrieval, webhook cryptographic verification, and webhook replay into the PayResolve inbox. Requires personal sandbox credentials.
+
+Run the offline suite against a running backend using Newman:
+
+```bash
+npx newman run postman/PayResolve.postman_collection.json --folder offline
+```
+
+Regenerate Postman request skeletons directly from the backend's live OpenAPI 3.1 definition (`/v3/api-docs`):
+
+```bash
+node scripts/postman-from-openapi.mjs
+```
+
+In GitHub Actions CI (`.github/workflows/ci.yml`), the `api-tests` job starts a PostgreSQL service container, launches the backend with `DEMO_MODE=true` and mock values, executes the offline Newman suite, and uploads `postman-report.json` as a build artifact.
+
 ## How the AI is wired
 
 The investigator calls tools that only read: the PayPal order and capture, webhook events for an order, the shop order, shipment details and the case's evidence. None of them can change data or move money.

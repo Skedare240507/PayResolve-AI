@@ -1,13 +1,706 @@
 {
   "info": {
-    "_postman_id": "payresolve-collection-v1",
+    "_postman_id": "payresolve-collection-v2",
     "name": "PayResolve AI Sandbox & API",
-    "description": "API collection for PayPal Sandbox payments, server captures, webhook signature verification, disputes, and PayResolve exception management.",
+    "description": "API collection for PayResolve AI. Contains 'offline' suite (automated CI smoke and security verification requiring no external credentials) and 'sandbox' suite (manual PayPal sandbox checkout, captures, disputes, and webhook replay).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8080",
+      "type": "string"
+    },
+    {
+      "key": "operatorUsername",
+      "value": "operator",
+      "type": "string"
+    },
+    {
+      "key": "operatorPassword",
+      "value": "operator123",
+      "type": "string"
+    },
+    {
+      "key": "viewerUsername",
+      "value": "viewer",
+      "type": "string"
+    },
+    {
+      "key": "viewerPassword",
+      "value": "viewer123",
+      "type": "string"
+    },
+    {
+      "key": "csrfToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "caseId",
+      "value": "PR-0142",
+      "type": "string"
+    },
+    {
+      "key": "actionId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "paypal_base_url",
+      "value": "https://api-m.sandbox.paypal.com",
+      "type": "string"
+    },
+    {
+      "key": "paypal_client_id",
+      "value": "your_sandbox_client_id",
+      "type": "string"
+    },
+    {
+      "key": "paypal_client_secret",
+      "value": "your_sandbox_client_secret",
+      "type": "string"
+    },
+    {
+      "key": "paypal_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypal_order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypal_approve_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypal_capture_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypal_refund_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypal_dispute_id",
+      "value": "PP-D-38912",
+      "type": "string"
+    },
+    {
+      "key": "paypal_webhook_id",
+      "value": "your_sandbox_webhook_id",
+      "type": "string"
+    },
+    {
+      "key": "shop_order_id",
+      "value": "ORD-10482",
+      "type": "string"
+    }
+  ],
   "item": [
     {
-      "name": "PayPal Sandbox",
+      "name": "offline",
+      "description": "Offline automated test suite. Tests health, authentication, CSRF token management, exception queue inspection, case details, event inbox, actions list, audit trail, benchmark telemetry, CSRF write-protection, and RBAC 403 enforcement for VIEWER role.",
+      "item": [
+        {
+          "name": "1. Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Health status is UP\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json.status).to.eql('UP');",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "    pm.expect(text).to.not.include('DATABASE_URL');",
+                  "    pm.expect(text).to.not.include('GEMINI_API_KEY');",
+                  "    pm.expect(text).to.not.include('GROQ_API_KEY');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Verifies actuator health liveness and readiness status without credentials."
+          }
+        },
+        {
+          "name": "2. Fetch CSRF Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"CSRF response shape is valid\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json).to.have.property('token');",
+                  "    pm.expect(json).to.have.property('headerName');",
+                  "    pm.expect(json.token).to.be.a('string').and.not.empty;",
+                  "    pm.collectionVariables.set('csrfToken', json.token);",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "    pm.expect(text).to.not.include('DATABASE_URL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/csrf",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "csrf"]
+            },
+            "description": "Fetches CSRF token and sets XSRF-TOKEN cookie for mutating operations."
+          }
+        },
+        {
+          "name": "3. Login as Operator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Operator session established\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json.username).to.eql(pm.variables.get('operatorUsername'));",
+                  "    pm.expect(json.role).to.eql('OPERATOR');",
+                  "    pm.expect(json.authenticated).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include(pm.variables.get('operatorPassword'));",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{operatorUsername}}\",\n  \"password\": \"{{operatorPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticates operator credentials and creates HTTP session cookie."
+          }
+        },
+        {
+          "name": "4. Get Authenticated Profile (Operator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile identity matches OPERATOR\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.username).to.eql('operator');",
+                  "    pm.expect(json.role).to.eql('OPERATOR');",
+                  "    pm.expect(json.authenticated).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Retrieves the active session user profile."
+          }
+        },
+        {
+          "name": "5. List Exception Queue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Queue response has content array\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('content');",
+                  "    pm.expect(json.content).to.be.an('array');",
+                  "    pm.expect(json.content.length).to.be.above(0);",
+                  "    const first = json.content[0];",
+                  "    pm.expect(first).to.have.property('id');",
+                  "    pm.expect(first).to.have.property('type');",
+                  "    pm.expect(first).to.have.property('status');",
+                  "    pm.collectionVariables.set('caseId', first.id);",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases"]
+            },
+            "description": "Lists payment exception queue items."
+          }
+        },
+        {
+          "name": "6. Get Case Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Case details response shape is valid\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json.id).to.eql(pm.variables.get('caseId'));",
+                  "    pm.expect(json).to.have.property('type');",
+                  "    pm.expect(json).to.have.property('status');",
+                  "    pm.expect(json).to.have.property('severity');",
+                  "    pm.expect(json).to.have.property('summary');",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/cases/{{caseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases", "{{caseId}}"]
+            },
+            "description": "Retrieves comprehensive details for an individual exception case."
+          }
+        },
+        {
+          "name": "7. List Events Inbox",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Events response is an array\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    if (json.length > 0) {",
+                  "        const evt = json[0];",
+                  "        pm.expect(evt).to.have.property('id');",
+                  "        pm.expect(evt).to.have.property('eventId');",
+                  "        pm.expect(evt).to.have.property('type');",
+                  "        pm.expect(evt).to.have.property('status');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"]
+            },
+            "description": "Lists received webhook events from durable event inbox."
+          }
+        },
+        {
+          "name": "8. List Actions / Proposals",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Actions response has pagination structure\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json).to.have.property('content');",
+                  "    pm.expect(json.content).to.be.an('array');",
+                  "    pm.expect(json).to.have.property('totalElements');",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/actions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "actions"]
+            },
+            "description": "Lists proposed remediation actions."
+          }
+        },
+        {
+          "name": "9. List Audit Trail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Audit response has content array\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json).to.have.property('content');",
+                  "    pm.expect(json.content).to.be.an('array');",
+                  "    if (json.content.length > 0) {",
+                  "        const entry = json.content[0];",
+                  "        pm.expect(entry).to.have.property('id');",
+                  "        pm.expect(entry).to.have.property('actor');",
+                  "        pm.expect(entry).to.have.property('action');",
+                  "        pm.expect(entry).to.have.property('at');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/audit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "audit"]
+            },
+            "description": "Retrieves the immutable audit log."
+          }
+        },
+        {
+          "name": "10. Latest Benchmark Telemetry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Benchmark metrics shape is valid\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json).to.have.property('totalCases');",
+                  "    pm.expect(json).to.have.property('passedCases');",
+                  "    pm.expect(json).to.have.property('precisionPct');",
+                  "    pm.expect(json).to.have.property('recallPct');",
+                  "    pm.expect(json).to.have.property('groundingRatePct');",
+                  "    pm.expect(json.totalCases).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/benchmark/latest",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "benchmark", "latest"]
+            },
+            "description": "Retrieves the latest benchmark precision and recall telemetry."
+          }
+        },
+        {
+          "name": "11. Write Security - CSRF Required on Action Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"State mutating request without CSRF is rejected with 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in error response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "    pm.expect(text).to.not.include('DATABASE_URL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "actions", "{{actionId}}", "approve"]
+            },
+            "description": "Verifies that state-mutating POST requests without a valid CSRF token fail fast with HTTP 403."
+          }
+        },
+        {
+          "name": "12. Login as Viewer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Viewer session established\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('object');",
+                  "    pm.expect(json.username).to.eql(pm.variables.get('viewerUsername'));",
+                  "    pm.expect(json.role).to.eql('VIEWER');",
+                  "    pm.expect(json.authenticated).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include(pm.variables.get('viewerPassword'));",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{viewerUsername}}\",\n  \"password\": \"{{viewerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticates as VIEWER user to verify restricted role authorization."
+          }
+        },
+        {
+          "name": "13. RBAC Security - Viewer Forbidden on Action Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Viewer approval attempt is rejected with 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "pm.test(\"Zero secrets leaked in error response\", function () {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.not.include('password');",
+                  "    pm.expect(text).to.not.include('client_secret');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-XSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "actions", "{{actionId}}", "approve"]
+            },
+            "description": "Verifies that even with a valid CSRF token, a user with VIEWER role is rejected with HTTP 403 Forbidden on action approvals."
+          }
+        },
+        {
+          "name": "14. Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Logout message confirmed\", function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('message');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Invalidates active session and clears security context."
+          }
+        }
+      ]
+    },
+    {
+      "name": "sandbox",
+      "description": "Manual PayPal Sandbox test suite. Requires real PayPal Developer Sandbox credentials (client_id, client_secret, webhook_id). Run manually to verify end-to-end sandbox payments, captures, webhooks, and dispute sync.",
       "item": [
         {
           "name": "1. Get OAuth Access Token",
@@ -18,7 +711,7 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "if (json.access_token) {",
-                  "    pm.environment.set(\"paypal_access_token\", json.access_token);",
+                  "    pm.collectionVariables.set('paypal_access_token', json.access_token);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -61,12 +754,12 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "if (json.id) {",
-                  "    pm.environment.set(\"paypal_order_id\", json.id);",
+                  "    pm.collectionVariables.set('paypal_order_id', json.id);",
                   "}",
                   "if (json.links) {",
                   "    const approve = json.links.find(l => l.rel === 'approve');",
                   "    if (approve) {",
-                  "        pm.environment.set(\"paypal_approve_url\", approve.href);",
+                  "        pm.collectionVariables.set('paypal_approve_url', approve.href);",
                   "    }",
                   "}"
                 ],
@@ -114,7 +807,7 @@
                   "const json = pm.response.json();",
                   "if (json.purchase_units && json.purchase_units[0].payments && json.purchase_units[0].payments.captures) {",
                   "    const cap = json.purchase_units[0].payments.captures[0];",
-                  "    pm.environment.set(\"paypal_capture_id\", cap.id);",
+                  "    pm.collectionVariables.set('paypal_capture_id', cap.id);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -235,14 +928,9 @@
             },
             "description": "Retrieves comprehensive details and evidence for a specific dispute."
           }
-        }
-      ]
-    },
-    {
-      "name": "PayResolve API",
-      "item": [
+        },
         {
-          "name": "PayPal Webhook Ingest / Replay",
+          "name": "11. PayPal Webhook Ingest / Replay into PayResolve",
           "request": {
             "method": "POST",
             "header": [
@@ -258,35 +946,11 @@
               "raw": "{\n  \"id\": \"WH-REPLAY-EVENT-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"resource_type\": \"capture\",\n  \"summary\": \"Payment capture completed\",\n  \"resource\": {\n    \"id\": \"{{paypal_capture_id}}\",\n    \"status\": \"COMPLETED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"84.50\"\n    },\n    \"custom_id\": \"{{shop_order_id}}\"\n  }\n}"
             },
             "url": {
-              "raw": "{{api_base_url}}/api/webhooks/paypal",
-              "host": ["{{api_base_url}}"],
+              "raw": "{{baseUrl}}/api/webhooks/paypal",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "webhooks", "paypal"]
             },
             "description": "Sends or replays a PayPal webhook event into the PayResolve durable event inbox."
-          }
-        },
-        {
-          "name": "List Cases",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{api_base_url}}/api/cases",
-              "host": ["{{api_base_url}}"],
-              "path": ["api", "cases"]
-            },
-            "description": "Lists exception investigation cases from PayResolve."
-          }
-        },
-        {
-          "name": "Get Case Details",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{api_base_url}}/api/cases/{{case_id}}",
-              "host": ["{{api_base_url}}"],
-              "path": ["api", "cases", "{{case_id}}"]
-            },
-            "description": "Retrieves case investigation details and evidence graph."
           }
         }
       ]

@@ -24,9 +24,9 @@ class OpenApiExportTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("Export OpenAPI 3 spec from /api/v3/api-docs to frontend/src/types/openapi.json")
+    @DisplayName("Export OpenAPI 3 spec from /v3/api-docs to frontend/src/types/openapi.json")
     void exportOpenApiSpec() throws Exception {
-        String json = mockMvc.perform(get("/api/v3/api-docs"))
+        String json = mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
