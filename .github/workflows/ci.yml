@@ -48,6 +48,7 @@ jobs:
           DATABASE_URL: jdbc:postgresql://localhost:5432/payresolve
           DB_USER: postgres
           DB_PASSWORD: postgres_ci_password
+          TESTCONTAINERS_RYUK_DISABLED: 'true'
           PAYPAL_CLIENT_ID: mock_ci_client_id
           PAYPAL_CLIENT_SECRET: mock_ci_secret
           PAYPAL_WEBHOOK_ID: mock_ci_webhook_id
@@ -142,7 +143,7 @@ jobs:
           chmod +x mvnw
           ./mvnw package -DskipTests -B
 
-      - name: Start PayResolve Backend
+      - name: Start Backend and Run API Integration Tests
         env:
           DATABASE_URL: jdbc:postgresql://localhost:5432/payresolve
           DB_USER: postgres
@@ -160,28 +161,36 @@ jobs:
           cd backend
           JAR=$(ls target/payresolve-*.jar | grep -v 'original' | head -n 1)
           echo "Starting jar: $JAR"
-          nohup java -Djava.net.preferIPv4Stack=true -jar "$JAR" > ../backend.log 2>&1 &
+          java -Djava.net.preferIPv4Stack=true -jar "$JAR" > ../backend.log 2>&1 &
+          SERVER_PID=$!
+          cd ..
 
-      - name: Wait for Backend Health
-        run: |
+          echo "Waiting for PayResolve Backend health..."
+          HEALTHY=false
           for i in {1..45}; do
             if curl -s http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
               echo "Backend is healthy!"
-              exit 0
+              HEALTHY=true
+              break
             fi
             echo "Waiting for backend ($i/45)..."
             sleep 2
           done
-          echo "Backend failed to become healthy within 90s. Log output:"
-          cat backend.log
-          exit 1
 
-      - name: Run Postman Offline Suite with Newman
-        run: |
+          if [ "$HEALTHY" != "true" ]; then
+            echo "Backend failed to become healthy within 90s. Log output:"
+            cat backend.log
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "Running Newman offline suite..."
           npx --yes newman run postman/PayResolve.postman_collection.json \
             --folder offline \
             --reporters cli,json \
             --reporter-json-export postman-report.json
+
+          kill $SERVER_PID 2>/dev/null || true
 
       - name: Upload Newman Test Report
         if: always()

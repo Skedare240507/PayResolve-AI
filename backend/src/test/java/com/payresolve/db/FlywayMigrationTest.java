@@ -2,11 +2,12 @@ package com.payresolve.db;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -22,26 +23,64 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Verifies that all Flyway database migrations apply cleanly on an empty PostgreSQL database
  * and that all domain tables, constraints, sequences, and triggers are correctly initialized.
+ *
+ * Uses the running PostgreSQL instance from DATABASE_URL if provided (e.g. CI service container),
+ * or dynamically starts a Testcontainer if Docker is available locally.
  */
-@Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("payresolve_test")
-            .withUsername("testuser")
-            .withPassword("testpass");
+    private static PostgreSQLContainer<?> postgresContainer;
+    private static String jdbcUrl;
+    private static String dbUsername;
+    private static String dbPassword;
+
+    @BeforeAll
+    static void setUpDatabase() {
+        String envDbUrl = System.getenv("DATABASE_URL");
+        if (envDbUrl != null && envDbUrl.startsWith("jdbc:postgresql://")) {
+            jdbcUrl = envDbUrl;
+            dbUsername = System.getenv("DB_USER") != null ? System.getenv("DB_USER") : "postgres";
+            dbPassword = System.getenv("DB_PASSWORD") != null ? System.getenv("DB_PASSWORD") : "postgres";
+        } else {
+            try {
+                postgresContainer = new PostgreSQLContainer<>("postgres:16-alpine")
+                        .withDatabaseName("payresolve_test")
+                        .withUsername("testuser")
+                        .withPassword("testpass");
+                postgresContainer.start();
+                jdbcUrl = postgresContainer.getJdbcUrl();
+                dbUsername = postgresContainer.getUsername();
+                dbPassword = postgresContainer.getPassword();
+            } catch (Throwable t) {
+                Assumptions.assumeTrue(false, "PostgreSQL not available for FlywayMigrationTest: " + t.getMessage());
+            }
+        }
+    }
+
+    @AfterAll
+    static void tearDownDatabase() {
+        if (postgresContainer != null) {
+            try {
+                postgresContainer.stop();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private static Connection getConnection() throws Exception {
+        return DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword);
+    }
 
     @Test
-    @DisplayName("Should apply V1 to V5 migrations on clean PostgreSQL and verify schema invariants")
+    @DisplayName("Should apply V1 to V6 migrations on clean PostgreSQL and verify schema invariants")
     void shouldApplyMigrationsOnCleanPostgres() throws Exception {
         // 1. Run Flyway migrations
         Flyway flyway = Flyway.configure()
-                .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                .dataSource(jdbcUrl, dbUsername, dbPassword)
                 .locations("classpath:db/migration")
                 .cleanDisabled(false)
                 .load();
 
+        flyway.clean();
         MigrateResult result = flyway.migrate();
         assertThat(result.success).isTrue();
         assertThat(result.migrationsExecuted).isGreaterThanOrEqualTo(5);
@@ -69,7 +108,7 @@ class FlywayMigrationTest {
         );
 
         Set<String> actualTables = new HashSet<>();
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(
                      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")) {
@@ -82,7 +121,7 @@ class FlywayMigrationTest {
         assertThat(actualTables).containsAll(expectedTables);
 
         // 3. Test keepalive table insert & select
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
 
             int inserted = stmt.executeUpdate("INSERT INTO public.keepalive DEFAULT VALUES");
@@ -95,7 +134,7 @@ class FlywayMigrationTest {
         }
 
         // 4. Verify unique constraint on webhook_events.paypal_event_id
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
                      "INSERT INTO webhook_events (paypal_event_id, event_type, raw_body) VALUES (?, ?, ?)")) {
 
@@ -110,7 +149,7 @@ class FlywayMigrationTest {
         }
 
         // 5. Verify unique constraint on proposed_actions.idempotency_key
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
+        try (Connection conn = getConnection()) {
             // First create a case to satisfy foreign key
             try (PreparedStatement psCase = conn.prepareStatement(
                     "INSERT INTO cases (id, type, severity) VALUES ('CASE-TEST-001', 'PAID_NOT_MARKED', 'HIGH')")) {
@@ -132,7 +171,7 @@ class FlywayMigrationTest {
         }
 
         // 6. Verify case_number_seq generates PR-xxxx formatted values
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT 'PR-' || lpad(nextval('case_number_seq')::text, 4, '0')")) {
             assertThat(rs.next()).isTrue();
@@ -141,7 +180,7 @@ class FlywayMigrationTest {
         }
 
         // 7. Verify audit_log immutability trigger forbids updates and deletes
-        try (Connection conn = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
+        try (Connection conn = getConnection()) {
             long auditId;
             try (PreparedStatement ps = conn.prepareStatement(
                     "INSERT INTO audit_log (actor, action, subject_type, subject_id) VALUES (?, ?, ?, ?) RETURNING id")) {

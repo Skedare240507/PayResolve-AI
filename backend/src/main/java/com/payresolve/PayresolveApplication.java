@@ -35,6 +35,17 @@ public class PayresolveApplication {
         if (envDbUrl != null && !envDbUrl.isBlank()) {
             DatasourceValidator.validate(envDbUrl);
             SensitiveDataMasker.registerSensitiveValue(envDbUrl);
+            System.setProperty("spring.datasource.url", envDbUrl);
+        }
+        String envUser = System.getenv("DB_USER");
+        if (envUser != null && !envUser.isBlank()) {
+            SensitiveDataMasker.registerSensitiveValue(envUser);
+            System.setProperty("spring.datasource.username", envUser);
+        }
+        String envPass = System.getenv("DB_PASSWORD");
+        if (envPass != null && !envPass.isBlank()) {
+            SensitiveDataMasker.registerSensitiveValue(envPass);
+            System.setProperty("spring.datasource.password", envPass);
         }
 
         // 2. Check local .env file if running in local development
