@@ -70,7 +70,6 @@ ALTER TABLE password_reset_tokens   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE benchmark_runs          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE demo_fault_switches     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE flyway_schema_history   ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
 GRANT SELECT, INSERT ON public.keepalive TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
