@@ -242,7 +242,7 @@ export default function EventInboxPage() {
         </div>
 
         {/* 4 Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Received</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
@@ -273,7 +273,7 @@ export default function EventInboxPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left Table */}
-          <div className="lg:col-span-8 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-6 overflow-hidden">
+          <div className="lg:col-span-8 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 overflow-hidden">
             {eventsLoading ? (
               <TableSkeleton rows={5} columns={6} />
             ) : eventsError ? (
@@ -373,7 +373,7 @@ export default function EventInboxPage() {
           </div>
 
           {/* Right Detail Card */}
-          <div className="lg:col-span-4 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-6 space-y-5">
+          <div className="lg:col-span-4 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 space-y-5">
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
                 {selectedEvent.eventId}: {selectedEvent.type}
