@@ -2,6 +2,14 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-midnight-950: #060a17;
+  --color-midnight-900: #090f24;
+  --color-midnight-850: #0d1530;
+  --color-midnight-800: #131e42;
+  --color-midnight-700: #1c2b5e;
+}
+
 @layer base {
   /* Custom scrollbar styling */
   ::-webkit-scrollbar {
