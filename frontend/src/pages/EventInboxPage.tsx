@@ -411,21 +411,21 @@ export default function EventInboxPage() {
             ) : (
               <div
                 key={isDark ? 'events-grid-dark' : 'events-grid-light'}
-                className={`${agThemeClass} w-full h-[400px] rounded-xl overflow-hidden`}
+                className={`${agThemeClass} w-full h-[400px] rounded-xl overflow-hidden border border-slate-150 dark:border-slate-800/80 shadow-xs`}
                 style={{
                   fontFamily: 'inherit',
                   '--ag-font-size': '12.5px',
                   '--ag-grid-size': '6px',
                   '--ag-row-height': '46px',
-                  '--ag-header-height': '40px',
-                  '--ag-border-color': isDark ? '#1e293b' : '#f1f5f9',
-                  '--ag-background-color': isDark ? '#0e1522' : '#ffffff',
-                  '--ag-data-background-color': isDark ? '#0e1522' : '#ffffff',
-                  '--ag-wrapper-background-color': isDark ? '#0e1522' : '#ffffff',
-                  '--ag-header-background-color': isDark ? '#0e1522' : '#ffffff',
+                  '--ag-header-height': '42px',
+                  '--ag-border-color': isDark ? '#1a2233' : '#f1f5f9',
+                  '--ag-background-color': isDark ? '#0b101b' : '#ffffff',
+                  '--ag-data-background-color': isDark ? '#0b101b' : '#ffffff',
+                  '--ag-wrapper-background-color': isDark ? '#0b101b' : '#ffffff',
+                  '--ag-header-background-color': isDark ? '#0e1524' : '#fafafa',
                   '--ag-foreground-color': isDark ? '#f1f5f9' : '#0f172a',
                   '--ag-header-foreground-color': isDark ? '#94a3b8' : '#64748b',
-                  '--ag-row-hover-color': isDark ? '#141f33' : '#f8fafc',
+                  '--ag-row-hover-color': isDark ? '#141d2f' : '#f8fafc',
                 } as React.CSSProperties}
               >
                 <AgGridReact<DisplayEvent>
