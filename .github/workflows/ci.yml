@@ -136,6 +136,12 @@ jobs:
       - name: Prepare application configuration
         run: cp backend/src/main/resources/application.yml.example backend/src/main/resources/application.yml
 
+      - name: Build backend JAR
+        run: |
+          cd backend
+          chmod +x mvnw
+          ./mvnw package -DskipTests -B
+
       - name: Start PayResolve Backend
         env:
           DATABASE_URL: jdbc:postgresql://localhost:5432/payresolve
@@ -152,20 +158,21 @@ jobs:
           GEMINI_API_KEY: mock_ci_gemini_key
         run: |
           cd backend
-          chmod +x mvnw
-          nohup ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Djava.net.preferIPv4Stack=true" -B > ../backend.log 2>&1 &
+          JAR=$(ls target/payresolve-*.jar | grep -v 'original' | head -n 1)
+          echo "Starting jar: $JAR"
+          nohup java -Djava.net.preferIPv4Stack=true -jar "$JAR" > ../backend.log 2>&1 &
 
       - name: Wait for Backend Health
         run: |
-          for i in {1..30}; do
+          for i in {1..45}; do
             if curl -s http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
               echo "Backend is healthy!"
               exit 0
             fi
-            echo "Waiting for backend ($i/30)..."
+            echo "Waiting for backend ($i/45)..."
             sleep 2
           done
-          echo "Backend failed to become healthy within 60s. Log output:"
+          echo "Backend failed to become healthy within 90s. Log output:"
           cat backend.log
           exit 1
 
