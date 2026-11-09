@@ -41,7 +41,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     <div className="h-screen w-screen overflow-hidden bg-[#f8fafc] dark:bg-[#080c14] text-slate-900 dark:text-slate-100 flex flex-col md:flex-row font-sans">
       
       {/* Mobile Top Bar */}
-      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-[#0d131f] border-b border-slate-200 dark:border-slate-800">
+      <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-[#0d131f] border-b border-slate-200 dark:border-slate-800 shrink-0 z-30">
         <Link to="/queue">
           <PayResolveLogo markSize={24} />
         </Link>
@@ -49,7 +49,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           <ThemeToggle />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer"
+            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <GoogleIcon name="close" size={20} /> : <GoogleIcon name="menu" size={20} />}
@@ -59,7 +59,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-[#0d131f] border-b border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1">
+        <div className="md:hidden bg-white/95 dark:bg-[#0d131f]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 space-y-1 shrink-0 z-20 shadow-md">
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.path);
             return (
@@ -67,10 +67,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm ${
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   active
                     ? 'bg-slate-100 dark:bg-[#131f33] text-slate-900 dark:text-white font-semibold'
-                    : 'text-slate-600 dark:text-slate-400'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/40'
                 }`}
               >
                 <GoogleIcon
@@ -155,7 +155,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </aside>
 
       {/* ─── MAIN PAGE CONTENT ─── */}
-      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden p-6 sm:p-10 lg:p-12">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden p-4 sm:p-8 lg:p-12">
         <div key={location.pathname} className="route-fade-slide">
           {children}
         </div>
