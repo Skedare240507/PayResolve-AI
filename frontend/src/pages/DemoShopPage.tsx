@@ -244,7 +244,7 @@ export default function DemoShopPage() {
             {productsLoading ? (
               <CardSkeleton count={2} />
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {products.map((prod) => (
                   <div
                     key={prod.id}
@@ -348,10 +348,10 @@ export default function DemoShopPage() {
           </div>
 
           {/* Right Column: Fault Switches & Recent Orders */}
-          <div className="lg:col-span-4 space-y-6">
+          <div className="lg:col-span-4 space-y-6 w-full">
             
             {/* Fault Switches Card */}
-            <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-5 shadow-2xs">
+            <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">Fault switches</h2>
