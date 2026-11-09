@@ -173,6 +173,20 @@ export async function fetchApi<T>(
 
   // Handle 401 Session Expiry -> redirect to /signed-out
   if (res.status === 401) {
+    let message = 'Session expired or unauthenticated';
+    let errorDetail: unknown = undefined;
+    try {
+      const data = await res.json();
+      errorDetail = data;
+      if (data.detail) {
+        message = data.detail;
+      } else if (data.message) {
+        message = data.message;
+      }
+    } catch {
+      // not JSON
+    }
+
     if (!options.skipAuthRedirect && typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       if (
@@ -183,7 +197,7 @@ export async function fetchApi<T>(
         window.location.href = '/signed-out';
       }
     }
-    throw new ApiError(401, 'Session expired or unauthenticated');
+    throw new ApiError(401, message, errorDetail);
   }
 
   // Handle 403 Forbidden -> redirect to /403
