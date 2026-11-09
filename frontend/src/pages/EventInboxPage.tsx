@@ -1,12 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AgGridReact } from 'ag-grid-react';
+import { ModuleRegistry, AllCommunityModule, type ColDef, type ICellRendererParams } from 'ag-grid-community';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
-import { api, type WebhookEventRecord } from '../lib/api';
+import { api, fetchApi, type WebhookEventRecord } from '../lib/api';
 import { toast } from '../lib/toast';
 import { TableSkeleton, ErrorState } from '../components/DataStates';
+import { useTheme } from '../lib/theme';
 
-interface DisplayEvent {
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+export interface DisplayEvent {
   id: number;
   eventId: string;
   type: string;
@@ -96,7 +104,7 @@ const FALLBACK_EVENTS: DisplayEvent[] = [
     tries: 0,
     at: '09:40:02',
     rawPayload:
-      '{"event_type":"CHECKOUT.ORDER.APPROVED","resource":{"id":"6HJ","status":"APPROVED","intent":"CAPTURE"}}',
+      '{"event_type":"CHECKOUT.ORDER.APPROVED","resource":{"id":"6HJ","status":"APPROVED","amount":{"value":"120.00","currency_code":"USD"},"custom_id":"10466"}}',
     attempts: [
       { label: 'Attempt 1', statusText: 'enqueued for processing', isError: false },
     ],
@@ -106,6 +114,7 @@ const FALLBACK_EVENTS: DisplayEvent[] = [
 
 export default function EventInboxPage() {
   const queryClient = useQueryClient();
+  const { isDark } = useTheme();
 
   // 1. Fetch Events
   const {
@@ -158,7 +167,7 @@ export default function EventInboxPage() {
         signature: sig,
         status,
         tries: e.tries || 1,
-        at: e.at || (e.receivedAt ? new Date(e.receivedAt).toLocaleTimeString() : '10:00:00'),
+        at: e.at || (e.receivedAt ? new Date(e.receivedAt).toLocaleTimeString([], { hour12: false }) : '10:00:00'),
         rawPayload: e.rawPayload || '{}',
         attempts: attemptsList.length > 0 ? attemptsList : [
           {
@@ -182,8 +191,7 @@ export default function EventInboxPage() {
   // Replay Mutation
   const replayMutation = useMutation({
     mutationFn: async () => {
-      // Dispatches raw payload to /api/webhooks/paypal with simulated headers
-      return fetch('/api/webhooks/paypal', {
+      return fetchApi('/api/webhooks/paypal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,6 +213,115 @@ export default function EventInboxPage() {
       toast.error(err instanceof Error ? err.message : 'Replay failed.');
     },
   });
+
+  // AG Grid Column Definitions
+  const columnDefs = useMemo<ColDef<DisplayEvent>[]>(() => [
+    {
+      field: 'eventId',
+      headerName: 'Event',
+      width: 125,
+      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
+        const val = params.value;
+        return (
+          <div className="flex items-center space-x-1.5 font-mono font-semibold text-slate-900 dark:text-white">
+            <span>{val}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(val);
+                toast.info(`Copied event ID: ${val}`);
+              }}
+              title={`Copy ${val}`}
+              className="text-slate-400 hover:text-blue-500 cursor-pointer p-0.5"
+            >
+              <GoogleIcon name="content_copy" size={13} />
+            </button>
+          </div>
+        );
+      },
+    },
+    {
+      field: 'type',
+      headerName: 'Type',
+      minWidth: 230,
+      flex: 1,
+      cellClass: 'font-mono text-xs text-slate-700 dark:text-slate-300',
+    },
+    {
+      field: 'resource',
+      headerName: 'Resource',
+      width: 130,
+      cellClass: 'text-slate-600 dark:text-slate-400 font-normal',
+    },
+    {
+      field: 'signature',
+      headerName: 'Signature',
+      width: 115,
+      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
+        const val = params.value;
+        return (
+          <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+            {val}
+          </span>
+        );
+      },
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 125,
+      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
+        const status = params.value;
+        if (status === 'Failed') {
+          return (
+            <span className="px-2.5 py-0.5 rounded-full border border-rose-400 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-medium">
+              Failed
+            </span>
+          );
+        }
+        if (status === 'Duplicate') {
+          return (
+            <span className="px-2.5 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-medium">
+              Duplicate
+            </span>
+          );
+        }
+        if (status === 'Processed') {
+          return (
+            <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+              Processed
+            </span>
+          );
+        }
+        return (
+          <span className="px-2.5 py-0.5 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-medium">
+            Received
+          </span>
+        );
+      },
+    },
+    {
+      field: 'tries',
+      headerName: 'Tries',
+      width: 85,
+      cellClass: 'font-mono text-xs text-slate-600 dark:text-slate-400 text-center',
+    },
+    {
+      field: 'at',
+      headerName: 'At',
+      width: 110,
+      cellClass: 'font-mono text-slate-500 dark:text-slate-400 text-xs',
+    },
+  ], []);
+
+  const defaultColDef = useMemo<ColDef>(() => ({
+    sortable: true,
+    filter: true,
+    resizable: true,
+  }), []);
+
+  const agThemeClass = isDark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz';
 
   return (
     <AppLayout>
@@ -269,11 +386,20 @@ export default function EventInboxPage() {
           </div>
         </div>
 
-        {/* 2-Column Content: Table & Detail Card */}
+        {/* 2-Column Content: AG Grid & Detail Card */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* Left Table */}
-          <div className="lg:col-span-8 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 overflow-hidden">
+          {/* Left: AG Grid Table */}
+          <div className="lg:col-span-8 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 overflow-hidden space-y-3">
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Incoming Webhook Stream
+              </span>
+              <span className="text-[11px] text-slate-400 font-mono">
+                Click any row to inspect raw payload &amp; attempt logs
+              </span>
+            </div>
+
             {eventsLoading ? (
               <TableSkeleton rows={5} columns={6} />
             ) : eventsError ? (
@@ -283,91 +409,37 @@ export default function EventInboxPage() {
                 onRetry={() => refetchEvents()}
               />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400 font-normal">
-                      <th className="py-2.5 pr-3 font-normal">Event</th>
-                      <th className="py-2.5 px-3 font-normal">Type</th>
-                      <th className="py-2.5 px-3 font-normal">Resource</th>
-                      <th className="py-2.5 px-3 font-normal">Signature</th>
-                      <th className="py-2.5 px-3 font-normal">Status</th>
-                      <th className="py-2.5 px-3 font-normal">Tries</th>
-                      <th className="py-2.5 pl-3 font-normal">At</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {displayEvents.map((evt, idx) => {
-                      const isSelected = selectedEvent.eventId === evt.eventId && selectedEvent.at === evt.at;
-
-                      const statusBadge =
-                        evt.status === 'Failed' ? (
-                          <span className="px-2.5 py-0.5 rounded-full border border-rose-400 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs">
-                            Failed
-                          </span>
-                        ) : evt.status === 'Duplicate' ? (
-                          <span className="px-2.5 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs">
-                            Duplicate
-                          </span>
-                        ) : evt.status === 'Processed' ? (
-                          <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400 text-xs">
-                            Processed
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs">
-                            Received
-                          </span>
-                        );
-
-                      return (
-                        <tr
-                          key={`${evt.eventId}-${idx}`}
-                          onClick={() => setSelectedEventId(evt.eventId)}
-                          className={`cursor-pointer transition-colors ${
-                            isSelected
-                              ? 'bg-slate-50 dark:bg-[#152033]'
-                              : 'hover:bg-slate-50/50 dark:hover:bg-[#121b2b]'
-                          }`}
-                        >
-                          <td className="py-3.5 pr-3 font-medium text-slate-900 dark:text-white font-mono whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 group">
-                              <span className="truncate max-w-[130px]" title={evt.eventId}>{evt.eventId}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(evt.eventId);
-                                  toast.info(`Copied event ID: ${evt.eventId}`);
-                                }}
-                                title={`Copy event ID: ${evt.eventId}`}
-                                className="opacity-0 group-hover:opacity-100 hover:text-blue-500 text-slate-400 transition-opacity p-0.5 cursor-pointer"
-                              >
-                                <GoogleIcon name="content_copy" size={13} />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-3 font-mono text-xs text-slate-700 dark:text-slate-300">{evt.type}</td>
-                          <td className="py-3.5 px-3 text-slate-600 dark:text-slate-400">{evt.resource}</td>
-                          <td className="py-3.5 px-3">
-                            <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs">
-                              {evt.signature}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-3">{statusBadge}</td>
-                          <td className="py-3.5 px-3 font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                            <span>{evt.tries}</span>
-                            {((evt.raw as unknown as { deliveryCount?: number })?.deliveryCount ?? 1) > 1 && (
-                              <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-sans font-medium">
-                                delivered {(evt.raw as unknown as { deliveryCount?: number }).deliveryCount}x
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 pl-3 font-mono text-slate-500">{evt.at}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div
+                key={isDark ? 'events-grid-dark' : 'events-grid-light'}
+                className={`${agThemeClass} w-full h-[400px] rounded-xl overflow-hidden`}
+                style={{
+                  fontFamily: 'inherit',
+                  '--ag-font-size': '12.5px',
+                  '--ag-grid-size': '6px',
+                  '--ag-row-height': '46px',
+                  '--ag-header-height': '40px',
+                  '--ag-border-color': isDark ? '#1e293b' : '#f1f5f9',
+                  '--ag-background-color': isDark ? '#0e1522' : '#ffffff',
+                  '--ag-data-background-color': isDark ? '#0e1522' : '#ffffff',
+                  '--ag-wrapper-background-color': isDark ? '#0e1522' : '#ffffff',
+                  '--ag-header-background-color': isDark ? '#0e1522' : '#ffffff',
+                  '--ag-foreground-color': isDark ? '#f1f5f9' : '#0f172a',
+                  '--ag-header-foreground-color': isDark ? '#94a3b8' : '#64748b',
+                  '--ag-row-hover-color': isDark ? '#141f33' : '#f8fafc',
+                } as React.CSSProperties}
+              >
+                <AgGridReact<DisplayEvent>
+                  rowData={displayEvents}
+                  columnDefs={columnDefs}
+                  defaultColDef={defaultColDef}
+                  animateRows={true}
+                  rowSelection="single"
+                  onRowClicked={(event) => {
+                    if (event.data?.eventId) {
+                      setSelectedEventId(event.data.eventId);
+                    }
+                  }}
+                />
               </div>
             )}
           </div>
