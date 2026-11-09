@@ -2,13 +2,26 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
 import { authenticateUser } from '../lib/authStore';
+import { GoogleIcon } from '../components/GoogleIcon';
 
 export default function SignInPage() {
   const [identifier, setIdentifier] = useState('operator');
   const [password, setPassword] = useState('••••••••');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const handleSelectRole = (role: 'operator' | 'viewer') => {
+    if (role === 'operator') {
+      setIdentifier('operator');
+      setPassword('operator123');
+    } else {
+      setIdentifier('viewer');
+      setPassword('viewer123');
+    }
+    setErrorMsg('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,9 +40,8 @@ export default function SignInPage() {
 
     setLoading(true);
     try {
-      let res = await authenticateUser(identifier.trim(), realPassword);
+      const res = await authenticateUser(identifier.trim(), realPassword);
       if (!res.success && realPassword.endsWith('!')) {
-        // Tolerant retry without trailing '!' if user typed operator123! or viewer123!
         const trimmedPwd = realPassword.slice(0, -1);
         const retryRes = await authenticateUser(identifier.trim(), trimmedPwd);
         if (retryRes.success) {
@@ -47,61 +59,93 @@ export default function SignInPage() {
     }
   };
 
+  const isOperator = identifier.toLowerCase() === 'operator';
+  const isViewer = identifier.toLowerCase() === 'viewer';
+
   return (
     <AuthLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Sign in
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-            Operators can approve actions. Viewers explore read-only.
-          </p>
-          <div className="flex items-center gap-2 mt-3">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Quick fill:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setIdentifier('operator');
-                setPassword('operator123');
-                setErrorMsg('');
-              }}
-              className="px-2 py-0.5 text-xs font-medium rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer transition-colors"
-            >
-              Operator
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIdentifier('viewer');
-                setPassword('viewer123');
-                setErrorMsg('');
-              }}
-              className="px-2 py-0.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-            >
-              Viewer
-            </button>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-900/60 text-[11px] font-mono text-blue-700 dark:text-blue-300 font-semibold mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span>PayPal Sandbox Demo Access</span>
           </div>
+          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            Sign in to PayResolve
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+            Select a demo role or enter your credentials to access the exception queue.
+          </p>
+        </div>
+
+        {/* Role Quick-Select Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => handleSelectRole('operator')}
+            className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+              isOperator
+                ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-500/80 shadow-xs'
+                : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-slate-900 dark:text-white">Operator</span>
+              {isOperator && (
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              Full access · can approve actions
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectRole('viewer')}
+            className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+              isViewer
+                ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-500/80 shadow-xs'
+                : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-slate-900 dark:text-white">Viewer</span>
+              {isViewer && (
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              Read-only · inspect queue &amp; logs
+            </p>
+          </button>
         </div>
 
         {errorMsg && (
-          <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 text-xs font-medium">
-            {errorMsg}
+          <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 text-xs font-medium flex items-start gap-2">
+            <GoogleIcon name="error" size={16} className="text-rose-600 shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
               Username
             </label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white dark:bg-[#131b26]"
-              required
-            />
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                <GoogleIcon name="person" size={18} />
+              </span>
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="operator or viewer"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white dark:bg-[#131b26] transition"
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -116,39 +160,58 @@ export default function SignInPage() {
                 Forgot password?
               </Link>
             </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onFocus={() => {
-                if (password === '••••••••') setPassword('');
-              }}
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white dark:bg-[#131b26]"
-              required
-            />
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                <GoogleIcon name="lock" size={18} />
+              </span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => {
+                  if (password === '••••••••') setPassword('');
+                }}
+                placeholder="Enter password"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white dark:bg-[#131b26] transition"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <GoogleIcon name={showPassword ? 'visibility_off' : 'visibility'} size={18} />
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white font-medium text-sm shadow-sm cursor-pointer transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-sm shadow-sm cursor-pointer transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? (
+              <>
+                <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <span>Sign in</span>
+            )}
           </button>
         </form>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400 pt-2">
-          Judges: viewer credentials are in the Devpost submission.
-        </p>
-
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <Link
             to="/"
-            className="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
           >
-            <span>&larr;</span>
+            <GoogleIcon name="arrow_back" size={15} />
             <span>Back to landing page</span>
           </Link>
+          <span className="font-mono text-[11px] text-slate-400">operator123 / viewer123</span>
         </div>
       </div>
     </AuthLayout>
