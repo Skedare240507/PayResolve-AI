@@ -149,7 +149,6 @@ html.dark .ag-studio-root-inner,
 html.dark .ag-studio-root-panel-container,
 html.dark .ag-studio-layout,
 html.dark .ag-studio-layout-canvas,
-html.dark .ag-studio-layout-content-container,
 html.dark .ag-studio-panel,
 html.dark .ag-studio-panel-search-container,
 html.dark .ag-studio-filters-panel,
@@ -157,6 +156,10 @@ html.dark .ag-studio-panel-search-container-contents {
   background-color: #0b101a !important;
   color: #f1f5f9 !important;
   border-color: #1e293b !important;
+}
+
+html.dark .ag-studio-layout-content-container {
+  background-color: transparent !important;
 }
 
 html.dark .ag-studio-panel-header,
@@ -168,6 +171,15 @@ html.dark .ag-studio-panel-search-container-contents input {
   background-color: #131b26 !important;
   color: #f1f5f9 !important;
   border-color: #1e293b !important;
+}
+
+html.dark .ag-studio-layout-widget-container {
+  background-color: transparent !important;
+  border-radius: 1rem !important;
+}
+
+html.dark .ag-studio-layout-widget {
+  color: #f1f5f9 !important;
 }
 
 /* ==========================================================================

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AgStudio, createWidgets } from 'ag-studio-react';
 import { AgStudioLicenseManager, studioTheme } from 'ag-studio';
 import { LicenseManager } from 'ag-grid-enterprise';
-import { colorSchemeDark } from 'ag-grid-community';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
@@ -52,44 +51,75 @@ export default function OperationsPage() {
   const casesList = useMemo(() => casesData?.content || [], [casesData?.content]);
   const eventsList = useMemo(() => eventsData?.content || [], [eventsData?.content]);
 
-  // Studio data sources
+  // Studio data sources with seed fallbacks so AG Studio schema discovery never encounters empty sources
   const studioData = useMemo(() => {
+    const caseRows = casesList.length > 0
+      ? casesList.map((c) => ({
+          id: c.id,
+          category: c.typeLabel || c.type,
+          orderId: c.order,
+          amountMinor: c.amountMinor,
+          severity: c.severity,
+          status: c.status,
+          age: c.age,
+        }))
+      : [
+          {
+            id: 'CASE-SEED-1',
+            category: 'PAID_NOT_MARKED',
+            orderId: 'ORD-1001',
+            amountMinor: 2499,
+            severity: 'HIGH',
+            status: 'OPEN',
+            age: '12m',
+          },
+        ];
+
+    const eventRows = eventsList.length > 0
+      ? eventsList.map((e) => ({
+          id: e.id,
+          eventId: e.eventId || e.paypalEventId,
+          eventType: e.type,
+          signature: e.signature,
+          status: e.status,
+          tries: e.tries,
+        }))
+      : [
+          {
+            id: 'EVT-SEED-1',
+            eventId: 'WH-1001',
+            eventType: 'PAYMENT.CAPTURE.COMPLETED',
+            signature: 'VALID',
+            status: 'PROCESSED',
+            tries: 1,
+          },
+        ];
+
+    const benchmarkRows = (benchmarkData?.cases && benchmarkData.cases.length > 0)
+      ? benchmarkData.cases.map((b) => ({
+          caseId: b.caseId,
+          type: b.type,
+          status: b.passed ? 'PASSED' : 'MISS',
+          expected: b.expectedOutcome,
+          actual: b.actualOutcome,
+          latencyMs: b.durationMs,
+        }))
+      : [
+          {
+            caseId: 'CASE-SEED-1',
+            type: 'PAID_NOT_MARKED',
+            status: 'PASSED',
+            expected: 'MARK_PAID',
+            actual: 'MARK_PAID',
+            latencyMs: 250,
+          },
+        ];
+
     return {
       sources: [
-        {
-          id: 'cases',
-          data: casesList.map((c) => ({
-            id: c.id,
-            category: c.typeLabel || c.type,
-            orderId: c.order,
-            amountMinor: c.amountMinor,
-            severity: c.severity,
-            status: c.status,
-            age: c.age,
-          })),
-        },
-        {
-          id: 'events',
-          data: eventsList.map((e) => ({
-            id: e.id,
-            eventId: e.eventId || e.paypalEventId,
-            eventType: e.type,
-            signature: e.signature,
-            status: e.status,
-            tries: e.tries,
-          })),
-        },
-        {
-          id: 'benchmark',
-          data: (benchmarkData?.cases || []).map((b) => ({
-            caseId: b.caseId,
-            type: b.type,
-            status: b.passed ? 'PASSED' : 'MISS',
-            expected: b.expectedOutcome,
-            actual: b.actualOutcome,
-            latencyMs: b.durationMs,
-          })),
-        },
+        { id: 'cases', data: caseRows },
+        { id: 'events', data: eventRows },
+        { id: 'benchmark', data: benchmarkRows },
       ],
     };
   }, [casesList, eventsList, benchmarkData]);
@@ -112,24 +142,24 @@ export default function OperationsPage() {
           id: 'cases-by-type',
           label: 'Cases by Type',
           comp: CasesByTypeWidget,
-          defaultSize: { width: 4, height: 4 },
-          minSize: { width: 3, height: 2 },
+          defaultSize: { width: 340, height: 480 },
+          minSize: { width: 280, height: 360 },
           form: (p) => p.createDefaults({}),
         },
         {
           id: 'time-to-cause',
-          label: 'Time to Cause',
+          label: 'Time to Root Cause',
           comp: TimeToCauseWidget,
-          defaultSize: { width: 4, height: 4 },
-          minSize: { width: 3, height: 2 },
+          defaultSize: { width: 340, height: 480 },
+          minSize: { width: 280, height: 360 },
           form: (p) => p.createDefaults({}),
         },
         {
           id: 'evidence-coverage',
           label: 'Evidence Coverage',
           comp: EvidenceCoverageWidget,
-          defaultSize: { width: 4, height: 4 },
-          minSize: { width: 3, height: 2 },
+          defaultSize: { width: 340, height: 480 },
+          minSize: { width: 280, height: 360 },
           form: (p) => p.createDefaults({}),
         },
       ],
@@ -138,16 +168,12 @@ export default function OperationsPage() {
           label: 'PayResolve Operations',
           widgetIds: ['cases-by-type', 'time-to-cause', 'evidence-coverage'],
         },
-        {
-          label: 'Standard Analytics',
-          widgetIds: ['grid', 'value', 'column-chart-grouped'],
-        },
       ],
-      defaultType: 'grid',
+      defaultType: 'cases-by-type',
     });
   }, []);
 
-  // Initial report layout
+  // Initial report layout with the 3 custom PayResolve analytics widgets
   const initialState = useMemo(() => {
     return {
       pages: [
@@ -169,17 +195,11 @@ export default function OperationsPage() {
               dataMapping: {},
               format: { title: { text: 'Evidence Invariants' } },
             },
-            'grid-widget': {
-              type: 'grid',
-              dataMapping: { source: 'cases' },
-              format: { title: { text: 'Live Discrepancy Feed' } },
-            },
           },
           widgetLayout: {
-            'cases-widget': { xTrack: 0, yTrack: 0, xSpan: 4, ySpan: 4 },
-            'time-widget': { xTrack: 4, yTrack: 0, xSpan: 4, ySpan: 4 },
-            'coverage-widget': { xTrack: 8, yTrack: 0, xSpan: 4, ySpan: 4 },
-            'grid-widget': { xTrack: 0, yTrack: 4, xSpan: 12, ySpan: 4 },
+            'cases-widget': { xTrack: 0, yTrack: 0, xSpan: 8, ySpan: 24 },
+            'time-widget': { xTrack: 8, yTrack: 0, xSpan: 8, ySpan: 24 },
+            'coverage-widget': { xTrack: 16, yTrack: 0, xSpan: 8, ySpan: 24 },
           },
         },
       ],
@@ -187,10 +207,8 @@ export default function OperationsPage() {
     };
   }, []);
 
-  // Theme matching PayResolve light / dark
-  const studioActiveTheme = useMemo(() => {
-    return isDark ? studioTheme.withPart(colorSchemeDark) : studioTheme;
-  }, [isDark]);
+  // Theme matching PayResolve
+  const studioActiveTheme = studioTheme;
 
   return (
     <AppLayout>
@@ -235,6 +253,26 @@ export default function OperationsPage() {
             </button>
           </div>
         </div>
+
+        {/* License Notice if missing */}
+        {!agLicense && (
+          <div className="px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <GoogleIcon name="info" size={16} className="text-amber-600 dark:text-amber-400" />
+              <span>
+                <strong>AG Studio Evaluation Mode:</strong> <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 font-mono text-[11px]">VITE_AG_LICENSE</code> is not set in <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 font-mono text-[11px]">frontend/.env</code>. AG Studio core features and custom widgets run in unrestricted trial mode with evaluation watermark. Exception Queue uses Community AG Grid (no license required).
+              </span>
+            </div>
+            <a
+              href="https://www.ag-grid.com/license-pricing/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-amber-700 dark:text-amber-300 underline font-medium hover:text-amber-800 whitespace-nowrap ml-3"
+            >
+              Get License
+            </a>
+          </div>
+        )}
 
         {/* 4 Summary Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">

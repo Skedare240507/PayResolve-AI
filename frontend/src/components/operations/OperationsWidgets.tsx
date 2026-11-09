@@ -83,7 +83,7 @@ export const CasesByTypeWidget: React.FC<AgWidgetParams<any, any, OperationsCont
   });
 
   return (
-    <div className="h-full w-full p-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs flex flex-col justify-between overflow-y-auto">
+    <div className="h-full w-full p-5 bg-white dark:bg-[#131b26] rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col justify-between overflow-y-auto">
       <div>
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center space-x-2">
@@ -149,7 +149,7 @@ export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsCont
   const groundingRate = benchmark?.groundingRatePct ?? 100.0;
 
   return (
-    <div className="h-full w-full p-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs flex flex-col justify-between overflow-y-auto">
+    <div className="h-full w-full p-5 bg-white dark:bg-[#131b26] rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col justify-between overflow-y-auto">
       <div>
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center space-x-2">
@@ -228,7 +228,7 @@ export const EvidenceCoverageWidget: React.FC<AgWidgetParams<any, any, Operation
   const missingPct = 100 - confirmedPct;
 
   return (
-    <div className="h-full w-full p-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs flex flex-col justify-between overflow-y-auto">
+    <div className="h-full w-full p-5 bg-white dark:bg-[#131b26] rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col justify-between overflow-y-auto">
       <div>
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center space-x-2">
