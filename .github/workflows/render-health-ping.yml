@@ -53,6 +53,12 @@ jobs:
           TARGET="${RENDER_API_URL%/}/actuator/health"
           echo "Sending keep-alive ping to: $TARGET"
 
+          # If the API endpoint is configured as payresolve-api, also determine UI gateway fallback
+          FALLBACK_TARGET=""
+          if [[ "$TARGET" == *"-api.onrender.com"* ]]; then
+            FALLBACK_TARGET="${TARGET//-api.onrender.com/-ai.onrender.com}"
+          fi
+
           # Retry up to 3 times with 15-second waits between attempts.
           # Render free instances spin down on idle; JVM + Flyway cold boot can take 45-60s on 0.1 CPU.
           ATTEMPTS=0
@@ -79,6 +85,24 @@ jobs:
             if [ -s response.json ]; then
               cat response.json
               echo ""
+            fi
+
+            # If primary target timed out/failed and a UI gateway counterpart exists, try via gateway proxy
+            if [ "$HTTP_CODE" != "200" ] && [ -n "$FALLBACK_TARGET" ]; then
+              echo "Primary endpoint returned $HTTP_CODE. Checking gateway rewrite proxy: $FALLBACK_TARGET..."
+              rm -f response.json curl_err.txt
+              HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" --max-time 90 "$FALLBACK_TARGET" 2>curl_err.txt || true)
+              if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ]; then
+                HTTP_CODE="000"
+                if [ -s curl_err.txt ]; then
+                  echo "Gateway curl notice: $(cat curl_err.txt)"
+                fi
+              fi
+              echo "Gateway HTTP response code: $HTTP_CODE"
+              if [ -s response.json ]; then
+                cat response.json
+                echo ""
+              fi
             fi
 
             if [ "$HTTP_CODE" = "200" ]; then
