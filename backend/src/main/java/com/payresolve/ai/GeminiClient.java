@@ -23,7 +23,7 @@ public class GeminiClient {
 
     public GeminiClient(
         @Value("${payresolve.ai.gemini.api-key:${GEMINI_API_KEY:${spring.ai.google.genai.api-key:}}}") String apiKey,
-        @Value("${payresolve.ai.gemini.model:${AI_MODEL:gemini-2.0-flash}}") String model,
+        @Value("${payresolve.ai.gemini.model:${GEMINI_MODEL:${AI_MODEL:gemini-3.5-flash}}}") String model,
         ObjectMapper objectMapper
     ) {
         this.apiKey = apiKey != null ? apiKey.trim() : "";
@@ -35,7 +35,52 @@ public class GeminiClient {
     }
 
     public boolean isAvailable() {
-        return !apiKey.isBlank();
+        return !resolveApiKey().isBlank();
+    }
+
+    public String resolveApiKey() {
+        if (isValidKey(apiKey)) {
+            return apiKey;
+        }
+        String sysEnv = System.getenv("GEMINI_API_KEY");
+        if (isValidKey(sysEnv)) {
+            return sysEnv.trim();
+        }
+        return readFromEnvFile("GEMINI_API_KEY");
+    }
+
+    private static boolean isValidKey(String key) {
+        if (key == null || key.isBlank()) return false;
+        String lower = key.toLowerCase();
+        return !lower.startsWith("mock_")
+            && !lower.contains("placeholder")
+            && !lower.contains("your_")
+            && !lower.contains("youractual")
+            && !lower.contains("your-actual")
+            && key.length() > 15;
+    }
+
+    private static String readFromEnvFile(String varName) {
+        for (String candidate : List.of(".env", "../.env")) {
+            java.nio.file.Path p = java.nio.file.Path.of(candidate);
+            if (java.nio.file.Files.exists(p)) {
+                try {
+                    for (String line : java.nio.file.Files.readAllLines(p)) {
+                        String trimmed = line.trim();
+                        if (trimmed.startsWith(varName + "=")) {
+                            String val = trimmed.substring(varName.length() + 1).trim();
+                            if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'"))) {
+                                val = val.substring(1, val.length() - 1);
+                            }
+                            if (isValidKey(val)) {
+                                return val;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return "";
     }
 
     public String getModel() {
@@ -43,7 +88,8 @@ public class GeminiClient {
     }
 
     public LlmResponse chatCompletion(String systemPrompt, String userPrompt, boolean jsonMode) {
-        if (!isAvailable()) {
+        String activeKey = resolveApiKey();
+        if (activeKey.isBlank()) {
             throw new IllegalStateException("Gemini API key is not configured");
         }
 
@@ -67,7 +113,7 @@ public class GeminiClient {
 
         try {
             String responseStr = restClient.post()
-                .uri("/" + model + ":generateContent?key=" + apiKey)
+                .uri("/" + model + ":generateContent?key=" + activeKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
@@ -92,7 +138,8 @@ public class GeminiClient {
     }
 
     public LlmResponse analyzeMultimodal(String prompt, String mimeType, String base64Data, boolean jsonMode) {
-        if (!isAvailable()) {
+        String activeKey = resolveApiKey();
+        if (activeKey.isBlank()) {
             throw new IllegalStateException("Gemini API key is not configured for multimodal analysis");
         }
 
@@ -120,7 +167,7 @@ public class GeminiClient {
 
         try {
             String responseStr = restClient.post()
-                .uri("/" + model + ":generateContent?key=" + apiKey)
+                .uri("/" + model + ":generateContent?key=" + activeKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()

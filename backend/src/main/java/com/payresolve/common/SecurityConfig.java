@@ -62,7 +62,8 @@ public class SecurityConfig {
                     "/api/auth/**",
                     "/api/cases/**",
                     "/api/investigations/**",
-                    "/api/benchmark/**"
+                    "/api/benchmark/**",
+                    "/api/agent/**"
                 )
             )
             .exceptionHandling(exceptions -> exceptions

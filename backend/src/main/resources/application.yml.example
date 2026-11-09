@@ -34,10 +34,10 @@ spring:
   ai:
     google:
       genai:
-        api-key: ${GEMINI_API_KEY:}
+        api-key: ${GEMINI_API_KEY:mock_gemini_key_for_boot}
         chat:
           options:
-            model: ${GEMINI_MODEL:gemini-2.0-flash}
+            model: ${GEMINI_MODEL:gemini-3.5-flash}
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
@@ -102,11 +102,11 @@ payresolve:
     provider: ${AI_PROVIDER:groq}
     groq:
       api-key: ${GROQ_API_KEY:}
-      model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+      model: ${GROQ_MODEL:openai/gpt-oss-120b}
       base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
     gemini:
       api-key: ${GEMINI_API_KEY:${spring.ai.google.genai.api-key:}}
-      model: ${GEMINI_MODEL:gemini-2.0-flash}
+      model: ${GEMINI_MODEL:gemini-3.5-flash}
   auth:
     operator-username: ${OPERATOR_USERNAME:operator}
     operator-password: ${OPERATOR_PASSWORD:}

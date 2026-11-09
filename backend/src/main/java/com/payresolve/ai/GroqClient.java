@@ -25,7 +25,7 @@ public class GroqClient {
 
     public GroqClient(
         @Value("${payresolve.ai.groq.api-key:${GROQ_API_KEY:}}") String apiKey,
-        @Value("${payresolve.ai.groq.model:llama-3.3-70b-versatile}") String model,
+        @Value("${payresolve.ai.groq.model:${GROQ_MODEL:openai/gpt-oss-120b}}") String model,
         @Value("${payresolve.ai.groq.base-url:https://api.groq.com/openai/v1}") String baseUrl,
         ObjectMapper objectMapper
     ) {
@@ -39,7 +39,52 @@ public class GroqClient {
     }
 
     public boolean isAvailable() {
-        return !apiKey.isBlank();
+        return !resolveApiKey().isBlank();
+    }
+
+    public String resolveApiKey() {
+        if (isValidKey(apiKey)) {
+            return apiKey;
+        }
+        String sysEnv = System.getenv("GROQ_API_KEY");
+        if (isValidKey(sysEnv)) {
+            return sysEnv.trim();
+        }
+        return readFromEnvFile("GROQ_API_KEY");
+    }
+
+    private static boolean isValidKey(String key) {
+        if (key == null || key.isBlank()) return false;
+        String lower = key.toLowerCase();
+        return !lower.startsWith("mock_")
+            && !lower.contains("placeholder")
+            && !lower.contains("your_")
+            && !lower.contains("youractual")
+            && !lower.contains("your-actual")
+            && key.length() > 15;
+    }
+
+    private static String readFromEnvFile(String varName) {
+        for (String candidate : List.of(".env", "../.env")) {
+            java.nio.file.Path p = java.nio.file.Path.of(candidate);
+            if (java.nio.file.Files.exists(p)) {
+                try {
+                    for (String line : java.nio.file.Files.readAllLines(p)) {
+                        String trimmed = line.trim();
+                        if (trimmed.startsWith(varName + "=")) {
+                            String val = trimmed.substring(varName.length() + 1).trim();
+                            if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'"))) {
+                                val = val.substring(1, val.length() - 1);
+                            }
+                            if (isValidKey(val)) {
+                                return val;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return "";
     }
 
     public String getModel() {
@@ -47,7 +92,8 @@ public class GroqClient {
     }
 
     public LlmResponse chatCompletion(String systemPrompt, String userPrompt, boolean jsonMode) {
-        if (!isAvailable()) {
+        String activeKey = resolveApiKey();
+        if (activeKey.isBlank()) {
             throw new IllegalStateException("Groq API key is not configured");
         }
 
@@ -71,7 +117,7 @@ public class GroqClient {
         try {
             String responseStr = restClient.post()
                 .uri("/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + activeKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(payload)
                 .retrieve()
