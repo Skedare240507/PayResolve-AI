@@ -5636,7 +5636,26 @@
             "description": "Updated at."
           }
         },
-        "description": "A merchant shop order with PayPal order linkage."
+        "description": "A merchant shop order with PayPal order linkage.",
+        "example": {
+          "id": "SO-0142",
+          "paypalOrderId": "9XK12345678",
+          "status": "PAID",
+          "totalMinor": 4999,
+          "currency": "USD",
+          "total": 49.99,
+          "customerLabel": "Jane Doe (jane@example.com)",
+          "items": [
+            {
+              "productId": "PROD-001",
+              "productName": "Wireless Ergonomic Mouse",
+              "quantity": 1,
+              "unitPrice": 49.99
+            }
+          ],
+          "createdAt": "2026-11-09T14:00:00Z",
+          "updatedAt": "2026-11-09T14:05:00Z"
+        }
       },
       "ShopOrderItemDto": {
         "type": "object",
@@ -5990,7 +6009,30 @@
             "description": "Last error."
           }
         },
-        "description": "A raw PayPal webhook event in the event inbox."
+        "description": "A raw PayPal webhook event in the event inbox.",
+        "example": {
+          "id": "EVT-001",
+          "eventId": "WH-12345",
+          "paypalEventId": "WH-PAYPAL-9876",
+          "type": "PAYMENT.CAPTURE.COMPLETED",
+          "resource": "CAPTURE",
+          "signature": "sha256-verified-sig",
+          "status": "PROCESSED",
+          "tries": 1,
+          "deliveryCount": 1,
+          "at": "2026-11-09T14:02:00Z",
+          "receivedAt": "2026-11-09T14:02:01Z",
+          "processedAt": "2026-11-09T14:02:02Z",
+          "rawPayload": "{\"id\":\"CAPTURE-01\",\"status\":\"COMPLETED\"}",
+          "attempts": [
+            {
+              "attemptNumber": 1,
+              "status": "SUCCESS",
+              "processedAt": "2026-11-09T14:02:02Z"
+            }
+          ],
+          "lastError": null
+        }
       },
       "DemoFaultsDto": {
         "type": "object",
@@ -6107,7 +6149,30 @@
             "description": "Explanation."
           }
         },
-        "description": "Structured AI investigation report with confirmed facts, conflicts, and recommendations."
+        "description": "Structured AI investigation report with confirmed facts, conflicts, and recommendations.",
+        "example": {
+          "status": "VERIFIED",
+          "confirmed": [
+            {
+              "fact": "Order amount $59.99 differs from capture amount $49.99",
+              "source": "PayPal Order API vs Capture Webhook"
+            }
+          ],
+          "conflicts": [],
+          "missing": [
+            {
+              "item": "Secondary capture event for remaining $10.00",
+              "significance": "Uncaptured delta pending"
+            }
+          ],
+          "recommendedAction": {
+            "actionType": "REFUND_OR_ADJUST",
+            "amount": 10.0,
+            "reason": "Adjust order total to captured amount or request buyer authorization"
+          },
+          "degraded": false,
+          "explanation": "Deterministic invariant check confirmed partial capture without secondary auth."
+        }
       },
       "InvestigationResponseDto": {
         "type": "object",
@@ -6149,7 +6214,34 @@
             "description": "Steps."
           }
         },
-        "description": "Full AI investigation result including steps taken, report, and verification status."
+        "description": "Full AI investigation result including steps taken, report, and verification status.",
+        "example": {
+          "id": "INV-001",
+          "caseId": "PR-0142",
+          "status": "COMPLETED",
+          "report": {
+            "status": "VERIFIED",
+            "confirmed": [],
+            "conflicts": [],
+            "missing": [],
+            "recommendedAction": null,
+            "degraded": false,
+            "explanation": "Root cause analyzed successfully."
+          },
+          "model": "gemini-2.0-flash",
+          "startedAt": "2026-11-09T14:05:00Z",
+          "finishedAt": "2026-11-09T14:05:03Z",
+          "steps": [
+            {
+              "stepNumber": 1,
+              "tool": "verify_capture_delta",
+              "input": "PR-0142",
+              "output": "Mismatch confirmed: $10.00",
+              "reasoning": "Comparing order total with captured amount",
+              "durationMs": 320
+            }
+          ]
+        }
       },
       "InvestigationStepDto": {
         "type": "object",
@@ -6591,7 +6683,32 @@
             "$ref": "#/components/schemas/ReplayTestSummary"
           }
         },
-        "description": "Summary of a benchmark evaluation run including precision, recall, and F1 metrics."
+        "description": "Summary of a benchmark evaluation run including precision, recall, and F1 metrics.",
+        "example": {
+          "id": "BM-001",
+          "runAt": "2026-11-09T12:00:00Z",
+          "totalCases": 50,
+          "passedCases": 48,
+          "precisionPct": 96.0,
+          "recallPct": 95.5,
+          "groundingRatePct": 98.2,
+          "medianTimeToCauseSeconds": 2.4,
+          "caseOutcomes": {
+            "PR-001": "PASSED",
+            "PR-002": "PASSED"
+          },
+          "cases": [],
+          "ruleTimeToCauseMs": 45,
+          "investigatorTimeToCauseSeconds": 2.3,
+          "manualTimeToCauseMinutes": 18.5,
+          "replayTest": {
+            "replayed": 10,
+            "succeeded": 10,
+            "failed": 0,
+            "durationMs": 1200,
+            "failureDetails": null
+          }
+        }
       },
       "ReplayTestSummary": {
         "type": "object",
@@ -7031,7 +7148,23 @@
             "description": "Created at."
           }
         },
-        "description": "Telemetry record for a single LLM API call made during investigation."
+        "description": "Telemetry record for a single LLM API call made during investigation.",
+        "example": {
+          "id": "LLM-001",
+          "caseId": "PR-0142",
+          "provider": "GOOGLE_GEMINI",
+          "model": "gemini-2.0-flash",
+          "callType": "INVESTIGATION",
+          "promptTokens": 420,
+          "completionTokens": 185,
+          "latencyMs": 840,
+          "costEstUsd": 0.00015,
+          "status": "SUCCESS",
+          "fallbackUsed": false,
+          "fallbackReason": null,
+          "snapshotHash": "sha256-abc123hash",
+          "createdAt": "2026-11-09T14:05:01Z"
+        }
       },
       "EventStatsDto": {
         "type": "object",
@@ -7125,7 +7258,25 @@
             "description": "Total events."
           }
         },
-        "description": "Chronological timeline of evidence events for a payment exception case."
+        "description": "Chronological timeline of evidence events for a payment exception case.",
+        "example": {
+          "caseId": "PR-0142",
+          "items": [
+            {
+              "id": "TL-001",
+              "timestamp": "2026-11-09T14:00:00Z",
+              "type": "ORDER_CREATED",
+              "title": "Order Initiated",
+              "description": "Customer created order #9XK123 for $49.99",
+              "source": "Shop Storefront",
+              "severity": "INFO",
+              "entityId": "SO-0142",
+              "entityType": "ORDER",
+              "metadata": "{}"
+            }
+          ],
+          "totalEvents": 1
+        }
       },
       "EvidenceTimelineItemDto": {
         "type": "object",
@@ -7221,7 +7372,50 @@
             "description": "Summary."
           }
         },
-        "description": "The derived evidence graph with nodes and edges for a payment exception case."
+        "description": "The derived evidence graph with nodes and edges for a payment exception case.",
+        "example": {
+          "caseId": "PR-0142",
+          "caseType": "AMOUNT_MISMATCH",
+          "nodes": [
+            {
+              "id": "node-order-1",
+              "type": "ORDER",
+              "label": "Order #9XK123 ($59.99)",
+              "status": "PENDING_CAPTURE",
+              "amount": 59.99,
+              "currency": "USD",
+              "timestamp": "2026-11-09T14:00:00Z",
+              "source": "Storefront",
+              "confidence": 1.0,
+              "metadata": "Expected amount $59.99"
+            },
+            {
+              "id": "node-capture-1",
+              "type": "CAPTURE",
+              "label": "Capture #CAP-001 ($49.99)",
+              "status": "COMPLETED",
+              "amount": 49.99,
+              "currency": "USD",
+              "timestamp": "2026-11-09T14:02:00Z",
+              "source": "PayPal Webhook",
+              "confidence": 1.0,
+              "metadata": "Captured amount $49.99"
+            }
+          ],
+          "edges": [
+            {
+              "id": "edge-1",
+              "source": "node-order-1",
+              "target": "node-capture-1",
+              "label": "PARTIALLY_CAPTURED",
+              "type": "CAUSAL",
+              "confidence": 1.0,
+              "metadata": "Delta: -$10.00"
+            }
+          ],
+          "missingNodesCount": 1,
+          "summary": "Amount mismatch detected between order total and capture event."
+        }
       },
       "EvidenceGraphEdgeDto": {
         "type": "object",
