@@ -1,0 +1,32 @@
+{
+  "$schema": "https://apimatic.io/schemas/apimatic-meta.json",
+  "name": "PayResolve AI API",
+  "description": "Developer SDK and API contract for PayResolve AI — PayPal payment exception detection, evidence graph analysis, and AI investigations with human approvals.",
+  "version": "1.0.0",
+  "input": "./payresolve-openapi.json",
+  "environments": {
+    "production": "https://payresolve-ai.onrender.com",
+    "sandbox": "http://localhost:8080"
+  },
+  "defaultEnvironment": "production",
+  "codeGeneration": {
+    "generateModels": true,
+    "generateController": true,
+    "nullify404": true,
+    "appendContentHeaders": true
+  },
+  "platforms": [
+    {
+      "platform": "TypeScript",
+      "packageName": "@payresolve/sdk",
+      "packageVersion": "1.0.0",
+      "description": "TypeScript/JavaScript SDK for interacting with PayResolve AI exception queues, evidence graphs, and automated PayPal investigations."
+    },
+    {
+      "platform": "Python",
+      "packageName": "payresolve-sdk",
+      "packageVersion": "1.0.0",
+      "description": "Python client library for PayResolve AI merchant exception detection and evidence graph analytics."
+    }
+  ]
+}
