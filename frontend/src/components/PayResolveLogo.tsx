@@ -1,81 +1,120 @@
 import React from 'react';
 
+/**
+ * PayResolveMark — the stylised "P" icon with ribbon sweep and checkmark bubble.
+ * Hand-crafted SVG matching the official PayResolve AI brand identity.
+ */
 export const PayResolveMark: React.FC<{
   className?: string;
   size?: number;
   spinning?: boolean;
-}> = ({ className = '', size = 32, spinning = false }) => {
+}> = ({ className = '', size = 32 }) => {
   return (
     <div
       className={`relative inline-flex items-center justify-center shrink-0 ${className}`}
       style={{ width: size, height: size }}
       role="img"
-      aria-label="PayResolve Mark"
+      aria-label="PayResolve mark"
     >
       <svg
         width={size}
         height={size}
-        viewBox="0 0 40 40"
+        viewBox="0 0 120 120"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className="overflow-visible"
       >
         <defs>
-          <linearGradient id="prShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#0066cc" />
-            <stop offset="100%" stopColor="#003366" />
+          {/* Main body — deep→bright blue gradient (3-D ribbon depth) */}
+          <linearGradient id="prBodyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"   stopColor="#1e6fff" />
+            <stop offset="45%"  stopColor="#2563eb" />
+            <stop offset="100%" stopColor="#1a4fc9" />
           </linearGradient>
 
-          <linearGradient id="prRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#38bdf8" />
-            <stop offset="50%" stopColor="#0066cc" />
-            <stop offset="100%" stopColor="#1e40af" />
+          {/* Highlight streak on ribbon */}
+          <linearGradient id="prHiGrad" x1="0" y1="0" x2="1" y2="0.6">
+            <stop offset="0%"   stopColor="#60c8ff" stopOpacity="0.95" />
+            <stop offset="60%"  stopColor="#3ba0ff" stopOpacity="0.50" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
           </linearGradient>
 
-          <filter id="prGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="1.5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          {/* Shadow underside of tail */}
+          <linearGradient id="prShGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#1240a8" />
+            <stop offset="100%" stopColor="#0d2f7a" />
+          </linearGradient>
+
+          {/* White speech-bubble oval */}
+          <radialGradient id="prBubble" cx="50%" cy="40%" r="60%">
+            <stop offset="0%"   stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#e8f1ff" />
+          </radialGradient>
+
+          <filter id="prShadow" x="-10%" y="-5%" width="130%" height="130%">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#1a3f9f" floodOpacity="0.35" />
           </filter>
         </defs>
 
-        {/* Deep blue background capsule */}
-        <rect
-          x="2"
-          y="2"
-          width="36"
-          height="36"
-          rx="10"
-          fill="url(#prShieldGrad)"
-          className="shadow-inner"
-        />
+        <g filter="url(#prShadow)">
+          {/* ── P body shape ── */}
+          <path
+            d="M 28 95
+               C 15 90, 10 78, 14 66
+               C 18 55, 24 50, 30 46
+               L 30 28
+               C 30 16, 38 8, 56 8
+               C 76 8, 92 20, 92 42
+               C 92 62, 76 74, 56 74
+               L 46 74
+               L 46 85
+               C 46 94, 40 102, 32 102
+               C 30 102, 28 100, 28 95 Z"
+            fill="url(#prBodyGrad)"
+          />
 
-        {/* Lighter blue ring with travelling sweep */}
-        <circle
-          cx="20"
-          cy="20"
-          r="13"
-          stroke="url(#prRingGrad)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeDasharray="28 54"
-          className={spinning ? 'animate-spin-slow origin-center' : ''}
-          filter="url(#prGlow)"
-        />
+          {/* ── Highlight streak (top-left ribbon shine) ── */}
+          <path
+            d="M 32 20 C 38 10, 52 7, 62 10 C 52 10, 42 15, 36 26 Z"
+            fill="url(#prHiGrad)"
+            opacity="0.85"
+          />
 
-        {/* Crisp checkmark that self-draws on load with stroke-dashoffset */}
-        <path
-          d="M14.5 20.5L18.5 24.5L25.5 16.5"
-          stroke="#ffffff"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="animate-check-draw"
-        />
+          {/* ── Bowl outer-edge highlight ── */}
+          <path
+            d="M 68 10 C 84 16, 93 28, 92 42 C 92 32, 86 20, 72 13 Z"
+            fill="#60c8ff"
+            opacity="0.45"
+          />
+
+          {/* ── Tail underside shadow ── */}
+          <path
+            d="M 28 72 C 18 74, 12 80, 14 88 C 16 96, 22 100, 28 95 C 26 90, 24 83, 28 72 Z"
+            fill="url(#prShGrad)"
+            opacity="0.6"
+          />
+
+          {/* ── White speech-bubble oval ── */}
+          <ellipse cx="62" cy="41" rx="22" ry="18" fill="url(#prBubble)" />
+
+          {/* ── Checkmark ── */}
+          <path
+            d="M 51 41 L 59 50 L 74 32"
+            stroke="#2563eb"
+            strokeWidth="5.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </g>
       </svg>
     </div>
   );
 };
 
+/**
+ * PayResolveLogo — full horizontal lockup: mark + "PayResolve" wordmark + "AI" badge.
+ * Mirrors the official brand lockup from the PayResolve AI design system.
+ */
 export const PayResolveLogo: React.FC<{
   className?: string;
   markSize?: number;
@@ -95,7 +134,7 @@ export const PayResolveLogo: React.FC<{
           <span className={`font-bold tracking-tight text-base sm:text-lg ${textColor}`}>
             PayResolve
           </span>
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#0066cc] text-white tracking-wide uppercase">
+          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[#2563eb] text-white tracking-wide uppercase leading-none flex items-center">
             AI
           </span>
         </div>
