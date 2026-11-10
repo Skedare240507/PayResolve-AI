@@ -169,10 +169,10 @@ cd frontend && npm run lint && npm run build
 
 ### API tests with Postman
 
-The repository includes an API test suite in `postman/PayResolve.postman_collection.json` organized into two folders:
+The repository includes an API test suite in `postman/PayResolve.postman_collection.json` plus a Portman contract configuration (`postman/portman-config.json`) and generated skeleton (`postman/generated.postman_collection.json`):
 
-1. **`offline`** — Automated regression and security suite (14 requests, 39 assertions). Validates actuator health, CSRF token generation, session cookies, operator authentication, VIEWER role restrictions (asserts HTTP 403 on approval mutations), exception queue, case details, durable events inbox, actions pagination, immutable audit trail, and benchmark telemetry. It requires zero external credentials and never leaks secrets.
-2. **`sandbox`** — Manual PayPal Sandbox end-to-end suite. Covers OAuth token acquisition, Orders v2 creation, buyer approval redirect, server-side capture, dispute retrieval, webhook cryptographic verification, and webhook replay into the PayResolve inbox. Requires personal sandbox credentials.
+1. **`offline`** (`21 requests, 132 assertions` across six sub-folders: `auth`, `queue`, `case`, `events`, `actions`, `benchmark`) — Automated regression, OpenAPI JSON-Schema contract, and security suite requiring zero external credentials. Validates actuator health, CSRF bootstrap/refresh, operator authentication, exception queue & telemetry overview (`/api/stats/overview`), case evidence graphs/timelines/investigations, durable event inbox/stats, actions & immutable audit pagination, CSRF & VIEWER RBAC 403 enforcement, and benchmark telemetry, while checking zero leaked secrets.
+2. **`sandbox`** (`11 requests`) — Manual PayPal Sandbox end-to-end suite. Covers OAuth token acquisition, Orders v2 creation, buyer approval redirect, server-side capture, dispute retrieval, webhook cryptographic verification, and webhook replay into `/api/webhooks/paypal`. Requires personal sandbox credentials.
 
 Run the offline suite against a running backend using Newman:
 
@@ -180,7 +180,7 @@ Run the offline suite against a running backend using Newman:
 npx newman run postman/PayResolve.postman_collection.json --folder offline
 ```
 
-Regenerate Postman request skeletons directly from the backend's live OpenAPI 3.1 definition (`/v3/api-docs`):
+Regenerate Postman request skeletons directly from the backend's live OpenAPI `3.0.1` definition (`/v3/api-docs` -> `postman/generated.postman_collection.json`):
 
 ```bash
 node scripts/postman-from-openapi.mjs

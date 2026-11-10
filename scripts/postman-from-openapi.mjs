@@ -2,14 +2,14 @@
 /**
  * scripts/postman-from-openapi.mjs
  *
- * Regenerates Postman request skeletons from the running backend's OpenAPI 3.1
+ * Regenerates Postman request skeletons from the running backend's OpenAPI 3.x
  * specification (/v3/api-docs) using openapi-to-postmanv2.
  *
  * Usage:
  *   node scripts/postman-from-openapi.mjs
- *   node scripts/postman-from-openapi.mjs --url http://localhost:8080/v3/api-docs
- *   node scripts/postman-from-openapi.mjs --out postman/generated_openapi_collection.json
- *   node scripts/postman-from-openapi.mjs --spec path/to/spec.json
+ *   node scripts/postman-from-openapi.mjs --url http://127.0.0.1:8080/v3/api-docs
+ *   node scripts/postman-from-openapi.mjs --out postman/generated.postman_collection.json
+ *   node scripts/postman-from-openapi.mjs --spec apimatic/payresolve-openapi.json
  */
 
 import { execFileSync } from 'node:child_process';
@@ -33,7 +33,7 @@ function getArg(flag, defaultValue) {
 
 const specFileArg = getArg('--spec', null);
 const openApiUrl = getArg('--url', process.env.OPENAPI_URL || 'http://127.0.0.1:8080/v3/api-docs');
-const outputPath = resolve(projectRoot, getArg('--out', 'postman/generated_openapi_collection.json'));
+const outputPath = resolve(projectRoot, getArg('--out', 'postman/generated.postman_collection.json'));
 
 async function fetchWithFallback(url) {
   try {

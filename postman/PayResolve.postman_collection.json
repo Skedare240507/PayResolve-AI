@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "payresolve-collection-v2",
     "name": "PayResolve AI Sandbox & API",
-    "description": "API collection for PayResolve AI. Contains 'offline' suite (automated CI smoke and security verification requiring no external credentials) and 'sandbox' suite (manual PayPal sandbox checkout, captures, disputes, and webhook replay).",
+    "description": "API contract and security test suite for PayResolve AI. Contains 'offline' suite organized into auth, queue, case, events, actions, and benchmark sub-folders (Portman-aligned OpenAPI JSON-Schema contract assertions, CSRF/RBAC checks, zero external credentials) and 'sandbox' manual PayPal Sandbox flow.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -105,596 +105,1359 @@
   "item": [
     {
       "name": "offline",
-      "description": "Offline automated test suite. Tests health, authentication, CSRF token management, exception queue inspection, case details, event inbox, actions list, audit trail, benchmark telemetry, CSRF write-protection, and RBAC 403 enforcement for VIEWER role.",
+      "description": "Automated offline CI suite grouped into auth, queue, case, events, actions, and benchmark folders with OpenAPI JSON-schema contract tests.",
       "item": [
         {
-          "name": "1. Health Check",
-          "event": [
+          "name": "auth",
+          "description": "Health check, CSRF token bootstrap, session login, profile verification, and operator auth guardrails.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Health status is UP\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json.status).to.eql('UP');",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "    pm.expect(text).to.not.include('DATABASE_URL');",
-                  "    pm.expect(text).to.not.include('GEMINI_API_KEY');",
-                  "    pm.expect(text).to.not.include('GROQ_API_KEY');",
-                  "});"
+              "name": "1. Health Check",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Health Check - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Health Check - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Health status is UP\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json).to.be.an(\"object\");",
+                      "    pm.expect(json.status).to.eql(\"UP\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/actuator/health",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "actuator",
+                    "health"
+                  ]
+                },
+                "description": "Verifies actuator health liveness and readiness status without credentials."
+              }
+            },
+            {
+              "name": "2. Fetch CSRF Token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Fetch CSRF Token - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch CSRF Token - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch CSRF Token - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch CSRF Token - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"additionalProperties\":{\"type\":[\"string\",\"null\"]}};",
+                      "pm.test(\"Fetch CSRF Token - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"CSRF token extracted and stored\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;",
+                      "    pm.expect(json).to.have.property(\"headerName\");",
+                      "    pm.collectionVariables.set(\"csrfToken\", json.token);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/csrf",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "csrf"
+                  ]
+                },
+                "description": "Fetches active CSRF token and sets XSRF-TOKEN cookie for mutating operations."
+              }
+            },
+            {
+              "name": "3. Login as Operator",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Login as Operator - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Operator - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Operator - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Operator - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"username\":{\"type\":[\"string\",\"null\"]},\"email\":{\"type\":[\"string\",\"null\"]},\"role\":{\"type\":[\"string\",\"null\"]},\"authenticated\":{\"type\":[\"boolean\",\"null\"]}}};",
+                      "pm.test(\"Login as Operator - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Operator session established\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.username).to.eql(pm.variables.get(\"operatorUsername\"));",
+                      "    pm.expect(json.role).to.eql(\"OPERATOR\");",
+                      "    pm.expect(json.authenticated).to.be.true;",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "    pm.expect(text).to.not.include(pm.variables.get(\"operatorPassword\"));",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Authenticates operator credentials and establishes an HTTP session cookie.",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
-                "type": "text/javascript"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{operatorUsername}}\",\n  \"password\": \"{{operatorPassword}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "4. Get Authenticated Profile (Operator)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Get Authenticated Profile - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Authenticated Profile - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Authenticated Profile - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Get Authenticated Profile - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"username\":{\"type\":[\"string\",\"null\"]},\"email\":{\"type\":[\"string\",\"null\"]},\"role\":{\"type\":[\"string\",\"null\"]},\"authenticated\":{\"type\":[\"boolean\",\"null\"]}}};",
+                      "pm.test(\"Get Authenticated Profile - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Profile identity matches OPERATOR\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.username).to.eql(\"operator\");",
+                      "    pm.expect(json.role).to.eql(\"OPERATOR\");",
+                      "    pm.expect(json.authenticated).to.be.true;",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "me"
+                  ]
+                },
+                "description": "Retrieves active authenticated session user profile."
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/actuator/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["actuator", "health"]
-            },
-            "description": "Verifies actuator health liveness and readiness status without credentials."
-          }
+          ]
         },
         {
-          "name": "2. Fetch CSRF Token",
-          "event": [
+          "name": "queue",
+          "description": "Exception queue query, filtering, pagination, and aggregated operational telemetry endpoints.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"CSRF response shape is valid\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json).to.have.property('token');",
-                  "    pm.expect(json).to.have.property('headerName');",
-                  "    pm.expect(json.token).to.be.a('string').and.not.empty;",
-                  "    pm.collectionVariables.set('csrfToken', json.token);",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "    pm.expect(text).to.not.include('DATABASE_URL');",
-                  "});"
-                ],
-                "type": "text/javascript"
+              "name": "5. List Exception Queue",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List Exception Queue - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"List Exception Queue - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"List Exception Queue - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"List Exception Queue - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"content\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"typeLabel\":{\"type\":[\"string\",\"null\"]},\"order\":{\"type\":[\"string\",\"null\"]},\"amount\":{\"type\":[\"string\",\"null\"]},\"amountMinor\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"currency\":{\"type\":[\"string\",\"null\"]},\"severity\":{\"type\":[\"string\",\"null\"]},\"age\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"openedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"resolvedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"summary\":{\"type\":[\"string\",\"null\"]}}}},\"page\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"size\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"totalElements\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"totalPages\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}};",
+                      "pm.test(\"List Exception Queue - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Queue contains at least one seeded case\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.content).to.be.an(\"array\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"caseId\", json.content[0].id);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases"
+                  ]
+                },
+                "description": "Lists paginated payment exception cases and captures caseId."
+              }
+            },
+            {
+              "name": "6. Filter Exception Queue by Page Size",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Filter Queue Page Size - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Filter Queue Page Size - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Filter Queue Page Size - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Filter Queue Page Size - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"content\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"typeLabel\":{\"type\":[\"string\",\"null\"]},\"order\":{\"type\":[\"string\",\"null\"]},\"amount\":{\"type\":[\"string\",\"null\"]},\"amountMinor\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"currency\":{\"type\":[\"string\",\"null\"]},\"severity\":{\"type\":[\"string\",\"null\"]},\"age\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"openedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"resolvedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"summary\":{\"type\":[\"string\",\"null\"]}}}},\"page\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"size\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"totalElements\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"totalPages\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}};",
+                      "pm.test(\"Filter Queue Page Size - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Pagination size respects limit\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.size).to.eql(5);",
+                      "    pm.expect(json.content.length).to.be.at.most(5);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases?page=0&size=5",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "0"
+                    },
+                    {
+                      "key": "size",
+                      "value": "5"
+                    }
+                  ]
+                },
+                "description": "Verifies query pagination parameters and page metadata contract."
+              }
+            },
+            {
+              "name": "7. Get Operational Telemetry Overview",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Telemetry Overview - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Telemetry Overview - Response time < 25000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(25000);",
+                      "});",
+                      "",
+                      "pm.test(\"Telemetry Overview - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Telemetry Overview - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"generatedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"totalCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"casesByType\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":[\"string\",\"null\"]},\"typeLabel\":{\"type\":[\"string\",\"null\"]},\"count\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}}},\"casesBySeverity\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"severity\":{\"type\":[\"string\",\"null\"]},\"count\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}}},\"evidenceCoverageByType\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":[\"string\",\"null\"]},\"typeLabel\":{\"type\":[\"string\",\"null\"]},\"confirmedNodes\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"missingNodes\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}}},\"webhooksByHour\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"hourIso\":{\"type\":[\"string\",\"null\"]},\"hourLabel\":{\"type\":[\"string\",\"null\"]},\"totalReceived\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"duplicateDeliveries\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}}},\"benchmarkComparison\":{\"type\":[\"object\",\"null\"],\"properties\":{\"benchmarkId\":{\"type\":[\"string\",\"null\"]},\"runAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"sampleSize\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"passedCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"ruleTimeMs\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"aiInvestigatorTimeMs\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"precisionPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"recallPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"groundingRatePct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"}}}}};",
+                      "pm.test(\"Telemetry Overview - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Overview contains non-negative totals and category arrays\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.totalCases).to.be.a(\"number\").and.at.least(0);",
+                      "    pm.expect(json.casesByType).to.be.an(\"array\");",
+                      "    pm.expect(json.casesBySeverity).to.be.an(\"array\");",
+                      "    pm.expect(json.evidenceCoverageByType).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/stats/overview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "overview"
+                  ]
+                },
+                "description": "Verifies read-only aggregated statistics endpoint backing Operations charts."
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/csrf",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "csrf"]
-            },
-            "description": "Fetches CSRF token and sets XSRF-TOKEN cookie for mutating operations."
-          }
+          ]
         },
         {
-          "name": "3. Login as Operator",
-          "event": [
+          "name": "case",
+          "description": "Individual case inspection, derived evidence graph, chronological timeline, and persisted AI investigation state.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Operator session established\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json.username).to.eql(pm.variables.get('operatorUsername'));",
-                  "    pm.expect(json.role).to.eql('OPERATOR');",
-                  "    pm.expect(json.authenticated).to.be.true;",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include(pm.variables.get('operatorPassword'));",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
+              "name": "8. Get Case Details",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Get Case Details - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Case Details - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Case Details - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Get Case Details - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"typeLabel\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"severity\":{\"type\":[\"string\",\"null\"]},\"paypalOrderId\":{\"type\":[\"string\",\"null\"]},\"shopOrderId\":{\"type\":[\"string\",\"null\"]},\"amount\":{\"type\":[\"string\",\"null\"]},\"amountMinor\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"currency\":{\"type\":[\"string\",\"null\"]},\"openedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"updatedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"resolvedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"summary\":{\"type\":[\"string\",\"null\"]}}};",
+                      "pm.test(\"Get Case Details - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Returned case matches requested caseId\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.id).to.eql(pm.variables.get(\"caseId\"));",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases/{{caseId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases",
+                    "{{caseId}}"
+                  ]
+                },
+                "description": "Retrieves detailed metadata for {{caseId}}."
+              }
+            },
+            {
+              "name": "9. Get Evidence Graph",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Get Evidence Graph - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Graph - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Graph - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Graph - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"caseId\":{\"type\":[\"string\",\"null\"]},\"caseType\":{\"type\":[\"string\",\"null\"]},\"nodes\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"label\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"source\":{\"type\":[\"string\",\"null\"]},\"externalId\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"observedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"isMissing\":{\"type\":[\"boolean\",\"null\"]},\"missingReason\":{\"type\":[\"string\",\"null\"]},\"metadata\":{\"type\":[\"object\",\"null\"],\"additionalProperties\":true}}}},\"edges\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"source\":{\"type\":[\"string\",\"null\"]},\"target\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"label\":{\"type\":[\"string\",\"null\"]},\"isDashed\":{\"type\":[\"boolean\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]}}}},\"missingNodesCount\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"summary\":{\"type\":[\"string\",\"null\"]}}};",
+                      "pm.test(\"Get Evidence Graph - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Graph matches caseId and contains nodes and edges\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.caseId).to.eql(pm.variables.get(\"caseId\"));",
+                      "    pm.expect(json.nodes).to.be.an(\"array\").and.not.empty;",
+                      "    pm.expect(json.edges).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases/{{caseId}}/graph",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases",
+                    "{{caseId}}",
+                    "graph"
+                  ]
+                },
+                "description": "Retrieves derived concrete and missing evidence nodes and causal edges."
+              }
+            },
+            {
+              "name": "10. Get Evidence Timeline",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Get Evidence Timeline - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Timeline - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Timeline - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Get Evidence Timeline - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"caseId\":{\"type\":[\"string\",\"null\"]},\"items\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"timestamp\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"formattedTime\":{\"type\":[\"string\",\"null\"]},\"actor\":{\"type\":[\"string\",\"null\"]},\"source\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"title\":{\"type\":[\"string\",\"null\"]},\"description\":{\"type\":[\"string\",\"null\"]},\"isDiscrepancy\":{\"type\":[\"boolean\",\"null\"]},\"externalId\":{\"type\":[\"string\",\"null\"]}}}},\"totalEvents\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}};",
+                      "pm.test(\"Get Evidence Timeline - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Timeline belongs to caseId\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.caseId).to.eql(pm.variables.get(\"caseId\"));",
+                      "    pm.expect(json.items).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases/{{caseId}}/timeline",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases",
+                    "{{caseId}}",
+                    "timeline"
+                  ]
+                },
+                "description": "Retrieves chronological evidence timeline for {{caseId}}."
+              }
+            },
+            {
+              "name": "11. Get Latest Persisted Investigation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Latest Investigation - Status is 200 or 204\", function () {",
+                      "    pm.expect([200, 204]).to.include(pm.response.code);",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Investigation - Response time < 5000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                      "});",
+                      "",
+                      "const invSchema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"caseId\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"report\":{\"type\":[\"object\",\"null\"],\"properties\":{\"status\":{\"type\":[\"string\",\"null\"]},\"confirmed\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"statement\":{\"type\":[\"string\",\"null\"]},\"evidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}}}}},\"conflicts\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"statement\":{\"type\":[\"string\",\"null\"]},\"evidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}}}}},\"missing\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"item\":{\"type\":[\"string\",\"null\"]},\"why\":{\"type\":[\"string\",\"null\"]}}}},\"recommendedAction\":{\"type\":[\"object\",\"null\"],\"properties\":{\"type\":{\"type\":[\"string\",\"null\"]},\"rationale\":{\"type\":[\"string\",\"null\"]},\"evidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}}}},\"degraded\":{\"type\":[\"boolean\",\"null\"]},\"explanation\":{\"type\":[\"string\",\"null\"]}}},\"model\":{\"type\":[\"string\",\"null\"]},\"startedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"finishedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"steps\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"tool\":{\"type\":[\"string\",\"null\"]},\"args\":{\"type\":[\"object\",\"null\"],\"additionalProperties\":true},\"resultDigest\":{\"type\":[\"string\",\"null\"]},\"startedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"latencyMs\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"}}}}}};",
+                      "if (pm.response.code === 200) {",
+                      "    pm.test(\"Latest Investigation - Content-Type and OpenAPI schema valid\", function () {",
+                      "        pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "        pm.response.to.have.jsonSchema(invSchema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "    });",
+                      "}",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/cases/{{caseId}}/investigations/latest",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cases",
+                    "{{caseId}}",
+                    "investigations",
+                    "latest"
+                  ]
+                },
+                "description": "Retrieves latest investigation trace when present (200) or clean empty state (204)."
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"{{operatorUsername}}\",\n  \"password\": \"{{operatorPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "Authenticates operator credentials and creates HTTP session cookie."
-          }
+          ]
         },
         {
-          "name": "4. Get Authenticated Profile (Operator)",
-          "event": [
+          "name": "events",
+          "description": "Durable PayPal webhook event inbox and aggregate delivery statistics.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Profile identity matches OPERATOR\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json.username).to.eql('operator');",
-                  "    pm.expect(json.role).to.eql('OPERATOR');",
-                  "    pm.expect(json.authenticated).to.be.true;",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
+              "name": "12. List Events Inbox",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List Events Inbox - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"List Events Inbox - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"List Events Inbox - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"List Events Inbox - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"eventId\":{\"type\":[\"string\",\"null\"]},\"paypalEventId\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"resource\":{\"type\":[\"string\",\"null\"]},\"signature\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"tries\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"deliveryCount\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"at\":{\"type\":[\"string\",\"null\"]},\"receivedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"processedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"rawPayload\":{\"type\":[\"string\",\"null\"]},\"attempts\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"label\":{\"type\":[\"string\",\"null\"]},\"statusText\":{\"type\":[\"string\",\"null\"]},\"isError\":{\"type\":[\"boolean\",\"null\"]}}}},\"lastError\":{\"type\":[\"string\",\"null\"]}}}};",
+                      "pm.test(\"List Events Inbox - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Events array returned\", function () {",
+                      "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/events",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events"
+                  ]
+                },
+                "description": "Lists ingested PayPal webhook events with delivery counts and statuses."
+              }
+            },
+            {
+              "name": "13. Get Event Inbox Stats",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Get Event Inbox Stats - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Event Inbox Stats - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Get Event Inbox Stats - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Get Event Inbox Stats - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"received\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"verified\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"processed\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"failedOrDuplicate\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"}}};",
+                      "pm.test(\"Get Event Inbox Stats - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Event counters are non-negative integers\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.received).to.be.at.least(0);",
+                      "    pm.expect(json.processed).to.be.at.least(0);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/events/stats",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "stats"
+                  ]
+                },
+                "description": "Retrieves aggregate webhook event counters."
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "me"]
-            },
-            "description": "Retrieves the active session user profile."
-          }
+          ]
         },
         {
-          "name": "5. List Exception Queue",
-          "event": [
+          "name": "actions",
+          "description": "Human-in-the-loop proposed actions, immutable audit log, CSRF enforcement, RBAC 403 checks, and logout.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Queue response has content array\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('content');",
-                  "    pm.expect(json.content).to.be.an('array');",
-                  "    pm.expect(json.content.length).to.be.above(0);",
-                  "    const first = json.content[0];",
-                  "    pm.expect(first).to.have.property('id');",
-                  "    pm.expect(first).to.have.property('type');",
-                  "    pm.expect(first).to.have.property('status');",
-                  "    pm.collectionVariables.set('caseId', first.id);",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
+              "name": "14. List Actions / Proposals",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List Actions - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"List Actions - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"List Actions - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"List Actions - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"content\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"caseId\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"status\":{\"type\":[\"string\",\"null\"]},\"idempotencyKey\":{\"type\":[\"string\",\"null\"]},\"payload\":{\"type\":[\"object\",\"null\"],\"additionalProperties\":true},\"proposedBy\":{\"type\":[\"string\",\"null\"]},\"decidedBy\":{\"type\":[\"string\",\"null\"]},\"decidedAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"createdAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"}}}},\"page\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"size\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"totalElements\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"totalPages\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}};",
+                      "pm.test(\"List Actions - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Actions pagination contract valid\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.content).to.be.an(\"array\");",
+                      "    if (json.content.length > 0) {",
+                      "        pm.collectionVariables.set(\"actionId\", String(json.content[0].id));",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/actions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "actions"
+                  ]
+                },
+                "description": "Lists paginated action proposals across cases."
+              }
+            },
+            {
+              "name": "15. List Audit Trail",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"List Audit Trail - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"List Audit Trail - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"List Audit Trail - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"List Audit Trail - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"content\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"at\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"actor\":{\"type\":[\"string\",\"null\"]},\"action\":{\"type\":[\"string\",\"null\"]},\"subjectType\":{\"type\":[\"string\",\"null\"]},\"subjectId\":{\"type\":[\"string\",\"null\"]},\"details\":{\"type\":[\"object\",\"null\"],\"additionalProperties\":true}}}},\"page\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"size\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"totalElements\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"totalPages\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"}}};",
+                      "pm.test(\"List Audit Trail - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Audit entries array returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.content).to.be.an(\"array\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/audit",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "audit"
+                  ]
+                },
+                "description": "Queries paginated append-only audit trail."
+              }
+            },
+            {
+              "name": "16. Write Security - CSRF Required on Action Approval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"CSRF Required on Approval - Status code is 403\", function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});",
+                      "",
+                      "pm.test(\"CSRF Required on Approval - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "actions",
+                    "{{actionId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Verifies mutating action approval without X-XSRF-TOKEN is rejected with HTTP 403.",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
-                "type": "text/javascript"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                }
+              }
+            },
+            {
+              "name": "17. Login as Viewer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Login as Viewer - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Viewer - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Viewer - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Login as Viewer - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"username\":{\"type\":[\"string\",\"null\"]},\"email\":{\"type\":[\"string\",\"null\"]},\"role\":{\"type\":[\"string\",\"null\"]},\"authenticated\":{\"type\":[\"boolean\",\"null\"]}}};",
+                      "pm.test(\"Login as Viewer - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Viewer session established\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.username).to.eql(pm.variables.get(\"viewerUsername\"));",
+                      "    pm.expect(json.role).to.eql(\"VIEWER\");",
+                      "    pm.expect(json.authenticated).to.be.true;",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "    pm.expect(text).to.not.include(pm.variables.get(\"viewerPassword\"));",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Authenticates read-only VIEWER user to test RBAC boundaries.",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{viewerUsername}}\",\n  \"password\": \"{{viewerPassword}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "18. Fetch Viewer CSRF Token",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Fetch Viewer CSRF Token - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch Viewer CSRF Token - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch Viewer CSRF Token - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Fetch Viewer CSRF Token - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"additionalProperties\":{\"type\":[\"string\",\"null\"]}};",
+                      "pm.test(\"Fetch Viewer CSRF Token - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Viewer CSRF token refreshed\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"csrfToken\", json.token);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/csrf",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "csrf"
+                  ]
+                },
+                "description": "Refreshes CSRF token for active VIEWER session before RBAC approval test."
+              }
+            },
+            {
+              "name": "19. RBAC Security - Viewer Forbidden on Action Approval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Viewer RBAC 403 - Status code is 403\", function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});",
+                      "",
+                      "pm.test(\"Viewer RBAC 403 - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "actions",
+                    "{{actionId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Verifies VIEWER role with valid CSRF token is rejected with HTTP 403 Forbidden.",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                }
+              }
+            },
+            {
+              "name": "20. Logout",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Logout - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Logout - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Logout - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Logout - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "pm.test(\"Logout message confirmed\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json).to.have.property(\"message\");",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": "Invalidates active HTTP session and clears security context."
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/cases",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "cases"]
-            },
-            "description": "Lists payment exception queue items."
-          }
+          ]
         },
         {
-          "name": "6. Get Case Details",
-          "event": [
+          "name": "benchmark",
+          "description": "Detector benchmark evaluation metrics and per-case pass/fail telemetry.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Case details response shape is valid\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json.id).to.eql(pm.variables.get('caseId'));",
-                  "    pm.expect(json).to.have.property('type');",
-                  "    pm.expect(json).to.have.property('status');",
-                  "    pm.expect(json).to.have.property('severity');",
-                  "    pm.expect(json).to.have.property('summary');",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
+              "name": "21. Latest Benchmark Telemetry",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Latest Benchmark Telemetry - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"runAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"totalCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"passedCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"precisionPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"recallPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"groundingRatePct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"medianTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"caseOutcomes\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"boolean\"}},\"cases\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"caseId\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"passed\":{\"type\":[\"boolean\",\"null\"]},\"expectedOutcome\":{\"type\":[\"string\",\"null\"]},\"actualOutcome\":{\"type\":[\"string\",\"null\"]},\"durationMs\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"expectedEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"actualEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"description\":{\"type\":[\"string\",\"null\"]}}}},\"ruleTimeToCauseMs\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"investigatorTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"manualTimeToCauseMinutes\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"replayTest\":{\"type\":[\"object\",\"null\"],\"properties\":{\"attempts\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"businessEffectsApplied\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"duplicatesBlocked\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"idempotent\":{\"type\":[\"boolean\",\"null\"]},\"eventId\":{\"type\":[\"string\",\"null\"]}}}}};",
+                      "pm.test(\"Latest Benchmark Telemetry - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Benchmark metrics show seeded cases\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.totalCases).to.be.above(0);",
+                      "    pm.expect(json.precisionPct).to.be.within(0, 100);",
+                      "    pm.expect(json.recallPct).to.be.within(0, 100);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/benchmark/latest",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "benchmark",
+                    "latest"
+                  ]
+                },
+                "description": "Retrieves latest benchmark precision, recall, grounding rate, and case breakdown."
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/cases/{{caseId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "cases", "{{caseId}}"]
-            },
-            "description": "Retrieves comprehensive details for an individual exception case."
-          }
-        },
-        {
-          "name": "7. List Events Inbox",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Events response is an array\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('array');",
-                  "    if (json.length > 0) {",
-                  "        const evt = json[0];",
-                  "        pm.expect(evt).to.have.property('id');",
-                  "        pm.expect(evt).to.have.property('eventId');",
-                  "        pm.expect(evt).to.have.property('type');",
-                  "        pm.expect(evt).to.have.property('status');",
-                  "    }",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "events"]
-            },
-            "description": "Lists received webhook events from durable event inbox."
-          }
-        },
-        {
-          "name": "8. List Actions / Proposals",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Actions response has pagination structure\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json).to.have.property('content');",
-                  "    pm.expect(json.content).to.be.an('array');",
-                  "    pm.expect(json).to.have.property('totalElements');",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/actions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "actions"]
-            },
-            "description": "Lists proposed remediation actions."
-          }
-        },
-        {
-          "name": "9. List Audit Trail",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Audit response has content array\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json).to.have.property('content');",
-                  "    pm.expect(json.content).to.be.an('array');",
-                  "    if (json.content.length > 0) {",
-                  "        const entry = json.content[0];",
-                  "        pm.expect(entry).to.have.property('id');",
-                  "        pm.expect(entry).to.have.property('actor');",
-                  "        pm.expect(entry).to.have.property('action');",
-                  "        pm.expect(entry).to.have.property('at');",
-                  "    }",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/audit",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "audit"]
-            },
-            "description": "Retrieves the immutable audit log."
-          }
-        },
-        {
-          "name": "10. Latest Benchmark Telemetry",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Benchmark metrics shape is valid\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json).to.have.property('totalCases');",
-                  "    pm.expect(json).to.have.property('passedCases');",
-                  "    pm.expect(json).to.have.property('precisionPct');",
-                  "    pm.expect(json).to.have.property('recallPct');",
-                  "    pm.expect(json).to.have.property('groundingRatePct');",
-                  "    pm.expect(json.totalCases).to.be.above(0);",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/api/benchmark/latest",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "benchmark", "latest"]
-            },
-            "description": "Retrieves the latest benchmark precision and recall telemetry."
-          }
-        },
-        {
-          "name": "11. Write Security - CSRF Required on Action Approval",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"State mutating request without CSRF is rejected with 403 Forbidden\", function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in error response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "    pm.expect(text).to.not.include('DATABASE_URL');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "actions", "{{actionId}}", "approve"]
-            },
-            "description": "Verifies that state-mutating POST requests without a valid CSRF token fail fast with HTTP 403."
-          }
-        },
-        {
-          "name": "12. Login as Viewer",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Viewer session established\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.be.an('object');",
-                  "    pm.expect(json.username).to.eql(pm.variables.get('viewerUsername'));",
-                  "    pm.expect(json.role).to.eql('VIEWER');",
-                  "    pm.expect(json.authenticated).to.be.true;",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include(pm.variables.get('viewerPassword'));",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"{{viewerUsername}}\",\n  \"password\": \"{{viewerPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "Authenticates as VIEWER user to verify restricted role authorization."
-          }
-        },
-        {
-          "name": "13. RBAC Security - Viewer Forbidden on Action Approval",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Viewer approval attempt is rejected with 403 Forbidden\", function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});",
-                  "",
-                  "pm.test(\"Zero secrets leaked in error response\", function () {",
-                  "    const text = pm.response.text();",
-                  "    pm.expect(text).to.not.include('password');",
-                  "    pm.expect(text).to.not.include('client_secret');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-XSRF-TOKEN",
-                "value": "{{csrfToken}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/actions/{{actionId}}/approve",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "actions", "{{actionId}}", "approve"]
-            },
-            "description": "Verifies that even with a valid CSRF token, a user with VIEWER role is rejected with HTTP 403 Forbidden on action approvals."
-          }
-        },
-        {
-          "name": "14. Logout",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Logout message confirmed\", function () {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json).to.have.property('message');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "logout"]
-            },
-            "description": "Invalidates active session and clears security context."
-          }
+          ]
         }
       ]
     },
@@ -721,26 +1484,50 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Accept-Language", "value": "en_US" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "en_US"
+              }
             ],
             "auth": {
               "type": "basic",
               "basic": [
-                { "key": "username", "value": "{{paypal_client_id}}", "type": "string" },
-                { "key": "password", "value": "{{paypal_client_secret}}", "type": "string" }
+                {
+                  "key": "username",
+                  "value": "{{paypal_client_id}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{paypal_client_secret}}",
+                  "type": "string"
+                }
               ]
             },
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "client_credentials", "type": "text" }
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{paypal_base_url}}/v1/oauth2/token",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v1", "oauth2", "token"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "oauth2",
+                "token"
+              ]
             },
             "description": "Fetches a fresh OAuth2 Bearer token from PayPal sandbox."
           }
@@ -770,9 +1557,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" },
-              { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              },
+              {
+                "key": "PayPal-Request-Id",
+                "value": "{{$guid}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -780,8 +1576,14 @@
             },
             "url": {
               "raw": "{{paypal_base_url}}/v2/checkout/orders",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v2", "checkout", "orders"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v2",
+                "checkout",
+                "orders"
+              ]
             },
             "description": "Creates an order in Orders v2 embedding shop_order_id into custom_id."
           }
@@ -792,7 +1594,9 @@
             "method": "GET",
             "url": {
               "raw": "{{paypal_approve_url}}",
-              "host": ["{{paypal_approve_url}}"]
+              "host": [
+                "{{paypal_approve_url}}"
+              ]
             },
             "description": "NOTE: Open this URL in a browser to simulate the buyer approving payment using the PayPal Sandbox personal account. Once approved, proceed to step 4 (Capture)."
           }
@@ -817,10 +1621,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" },
-              { "key": "Prefer", "value": "return=representation" },
-              { "key": "PayPal-Request-Id", "value": "{{$guid}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              },
+              {
+                "key": "PayPal-Request-Id",
+                "value": "{{$guid}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -828,8 +1644,16 @@
             },
             "url": {
               "raw": "{{paypal_base_url}}/v2/checkout/orders/{{paypal_order_id}}/capture",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v2", "checkout", "orders", "{{paypal_order_id}}", "capture"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v2",
+                "checkout",
+                "orders",
+                "{{paypal_order_id}}",
+                "capture"
+              ]
             },
             "description": "Captures the approved PayPal order server-side."
           }
@@ -839,12 +1663,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "url": {
               "raw": "{{paypal_base_url}}/v2/checkout/orders/{{paypal_order_id}}",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v2", "checkout", "orders", "{{paypal_order_id}}"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v2",
+                "checkout",
+                "orders",
+                "{{paypal_order_id}}"
+              ]
             },
             "description": "Retrieves the order details including status and attached captures/refunds."
           }
@@ -854,12 +1688,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "url": {
               "raw": "{{paypal_base_url}}/v2/payments/captures/{{paypal_capture_id}}",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v2", "payments", "captures", "{{paypal_capture_id}}"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v2",
+                "payments",
+                "captures",
+                "{{paypal_capture_id}}"
+              ]
             },
             "description": "Queries capture details including gross amount, fee, and net amount (read-only)."
           }
@@ -869,12 +1713,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "url": {
               "raw": "{{paypal_base_url}}/v2/payments/refunds/{{paypal_refund_id}}",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v2", "payments", "refunds", "{{paypal_refund_id}}"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v2",
+                "payments",
+                "refunds",
+                "{{paypal_refund_id}}"
+              ]
             },
             "description": "Queries refund details (read-only)."
           }
@@ -884,8 +1738,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -893,8 +1753,14 @@
             },
             "url": {
               "raw": "{{paypal_base_url}}/v1/notifications/verify-webhook-signature",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v1", "notifications", "verify-webhook-signature"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "verify-webhook-signature"
+              ]
             },
             "description": "Sends incoming webhook headers and event payload to PayPal for cryptographic verification."
           }
@@ -904,12 +1770,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "url": {
               "raw": "{{paypal_base_url}}/v1/customer/disputes",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v1", "customer", "disputes"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "customer",
+                "disputes"
+              ]
             },
             "description": "Lists customer disputes from PayPal Sandbox (requires dispute scopes; otherwise synthetic fixtures are used in PayResolve)."
           }
@@ -919,12 +1794,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{paypal_access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{paypal_access_token}}"
+              }
             ],
             "url": {
               "raw": "{{paypal_base_url}}/v1/customer/disputes/{{paypal_dispute_id}}",
-              "host": ["{{paypal_base_url}}"],
-              "path": ["v1", "customer", "disputes", "{{paypal_dispute_id}}"]
+              "host": [
+                "{{paypal_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "customer",
+                "disputes",
+                "{{paypal_dispute_id}}"
+              ]
             },
             "description": "Retrieves comprehensive details and evidence for a specific dispute."
           }
@@ -934,12 +1819,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "PAYPAL-AUTH-ALGO", "value": "SHA256withRSA" },
-              { "key": "PAYPAL-CERT-URL", "value": "https://api-m.sandbox.paypal.com/v1/notifications/certs/CERT-360002" },
-              { "key": "PAYPAL-TRANSMISSION-ID", "value": "TRANS-REPLAY-{{$guid}}" },
-              { "key": "PAYPAL-TRANSMISSION-SIG", "value": "DUMMY_TEST_SIGNATURE" },
-              { "key": "PAYPAL-TRANSMISSION-TIME", "value": "2026-11-07T12:00:00Z" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "PAYPAL-AUTH-ALGO",
+                "value": "SHA256withRSA"
+              },
+              {
+                "key": "PAYPAL-CERT-URL",
+                "value": "https://api-m.sandbox.paypal.com/v1/notifications/certs/CERT-360002"
+              },
+              {
+                "key": "PAYPAL-TRANSMISSION-ID",
+                "value": "TRANS-REPLAY-{{$guid}}"
+              },
+              {
+                "key": "PAYPAL-TRANSMISSION-SIG",
+                "value": "DUMMY_TEST_SIGNATURE"
+              },
+              {
+                "key": "PAYPAL-TRANSMISSION-TIME",
+                "value": "2026-11-07T12:00:00Z"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -947,8 +1850,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/webhooks/paypal",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "webhooks", "paypal"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webhooks",
+                "paypal"
+              ]
             },
             "description": "Sends or replays a PayPal webhook event into the PayResolve durable event inbox."
           }

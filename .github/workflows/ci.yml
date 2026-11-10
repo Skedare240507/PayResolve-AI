@@ -194,6 +194,23 @@ jobs:
             --reporters cli,json \
             --reporter-json-export postman-report.json
 
+          node -e "
+            const fs = require('fs');
+            if (fs.existsSync('postman-report.json') && process.env.GITHUB_STEP_SUMMARY) {
+              const r = JSON.parse(fs.readFileSync('postman-report.json', 'utf8'));
+              const s = r.run?.stats || {};
+              const lines = [
+                '### Postman & Newman Offline Suite Summary',
+                '| Metric | Total | Failed |',
+                '|---|---|---|',
+                '| Requests | ' + (s.requests?.total ?? 0) + ' | ' + (s.requests?.failed ?? 0) + ' |',
+                '| Assertions | ' + (s.assertions?.total ?? 0) + ' | ' + (s.assertions?.failed ?? 0) + ' |',
+                '| Test Scripts | ' + (s.testScripts?.total ?? 0) + ' | ' + (s.testScripts?.failed ?? 0) + ' |'
+              ];
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+            }
+          "
+
           kill $SERVER_PID 2>/dev/null || true
 
       - name: Upload Newman Test Report

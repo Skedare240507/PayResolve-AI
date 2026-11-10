@@ -1,0 +1,98 @@
+{
+  "version": 1.0,
+  "globals": {
+    "collectionPreRequestScripts": [],
+    "collectionTestScripts": [
+      "pm.test('Zero secrets leaked in response', function () { const text = pm.response.text(); pm.expect(text).to.not.include('client_secret'); pm.expect(text).to.not.include('DATABASE_URL'); pm.expect(text).to.not.include('GEMINI_API_KEY'); pm.expect(text).to.not.include('GROQ_API_KEY'); });"
+    ],
+    "stripResponseExamples": false
+  },
+  "tests": {
+    "contractTests": [
+      {
+        "openApiOperation": "GET::/api/cases",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/stats/overview",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/cases/{id}",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/cases/{id}/graph",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/cases/{id}/timeline",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/events",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/events/stats",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/actions",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/audit",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      },
+      {
+        "openApiOperation": "GET::/api/benchmark/latest",
+        "statusSuccess": { "enabled": true },
+        "contentType": { "enabled": true },
+        "jsonBody": { "enabled": true },
+        "schemaValidation": { "enabled": true },
+        "responseTime": { "enabled": true, "maxMs": 5000 }
+      }
+    ],
+    "variationTests": [],
+    "extendTests": []
+  },
+  "assignVariables": [],
+  "overwrites": []
+}
