@@ -603,38 +603,41 @@ export default function GraphExplorerPage() {
         </div>
 
         {/* The AG Grid Community Data View */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0e1522] overflow-hidden shadow-xs p-4">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0e1522] overflow-hidden shadow-sm">
           {graphLoading ? (
-            <TableSkeleton rows={6} />
+            <div className="p-6">
+              <TableSkeleton rows={6} />
+            </div>
           ) : graphError ? (
-            <ErrorState
-              title="Failed to load graph data"
-              message="The server could not derive the evidence graph for this case."
-              onRetry={() => {}}
-            />
+            <div className="p-6">
+              <ErrorState
+                title="Failed to load graph data"
+                message="The server could not derive the evidence graph for this case."
+                onRetry={() => {}}
+              />
+            </div>
           ) : activeTab === 'nodes' && filteredNodeRows.length === 0 ? (
-            <EmptyState
-              icon="search_off"
-              title="No nodes match your filter"
-              description="Try adjusting your search criteria or switching to a different active case."
-            />
+            <div className="p-6">
+              <EmptyState
+                icon="search_off"
+                title="No nodes match your filter"
+                description="Try adjusting your search criteria or switching to a different active case."
+              />
+            </div>
           ) : activeTab === 'edges' && filteredEdgeRows.length === 0 ? (
-            <EmptyState
-              icon="alt_route"
-              title="No edges found"
-              description="No edge relationships recorded for this case."
-            />
+            <div className="p-6">
+              <EmptyState
+                icon="alt_route"
+                title="No edges found"
+                description="No edge relationships recorded for this case."
+              />
+            </div>
           ) : (
             <div
               className={`w-full ${agThemeClass}`}
               style={{
-                height: 480,
-                '--ag-background-color': isDark ? '#0e1522' : '#ffffff',
-                '--ag-header-background-color': isDark ? '#0e1522' : '#f8fafc',
-                '--ag-border-color': isDark ? '#1e293b' : '#e2e8f0',
-                '--ag-row-border-color': isDark ? '#1e293b' : '#f1f5f9',
-                '--ag-row-hover-color': isDark ? '#141d2f' : '#f8fafc',
-              } as React.CSSProperties}
+                height: 520,
+              }}
             >
               {activeTab === 'nodes' ? (
                 <AgGridReact<GraphNodeRow>
