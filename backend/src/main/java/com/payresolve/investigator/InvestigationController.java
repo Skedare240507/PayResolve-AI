@@ -4,6 +4,9 @@ import com.payresolve.ai.LlmCallRecord;
 import com.payresolve.ai.LlmCallRepository;
 import com.payresolve.investigator.model.InvestigationResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,7 +45,15 @@ public class InvestigationController {
     @GetMapping("/cases/{id}/investigations/latest")
     @Operation(
         operationId = "getLatestInvestigationForCase",
-        summary = "Retrieve the latest persisted AI investigation and step latencies for a case"
+        summary = "Retrieve the latest persisted AI investigation and step latencies for a case",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "Latest persisted investigation report and tool latencies",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = InvestigationResponseDto.class))
+            ),
+            @ApiResponse(responseCode = "204", description = "No investigation recorded yet for this case")
+        }
     )
     public ResponseEntity<InvestigationResponseDto> getLatestInvestigationForCase(@PathVariable String id) {
         return investigatorService.getRecentInvestigationForCase(id)

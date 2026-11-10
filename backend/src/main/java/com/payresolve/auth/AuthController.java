@@ -2,6 +2,8 @@ package com.payresolve.auth;
 
 import com.payresolve.auth.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -28,7 +30,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Authenticate credentials and establish an active HTTP session")
+    @Operation(
+        summary = "Authenticate credentials and establish an active HTTP session",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Authenticated user session details"),
+            @ApiResponse(responseCode = "401", description = "Invalid username or password")
+        }
+    )
     public ResponseEntity<UserDto> login(
         @Valid @RequestBody LoginRequest request,
         HttpServletRequest httpRequest
@@ -81,7 +89,7 @@ public class AuthController {
 
     @GetMapping("/csrf")
     @Operation(summary = "Retrieve active CSRF token for state-mutating requests")
-    public ResponseEntity<Map<String, String>> getCsrfToken(CsrfToken csrfToken) {
+    public ResponseEntity<Map<String, String>> getCsrfToken(@Parameter(hidden = true) CsrfToken csrfToken) {
         if (csrfToken != null) {
             return ResponseEntity.ok(Map.of(
                 "token", csrfToken.getToken(),

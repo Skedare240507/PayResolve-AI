@@ -8,6 +8,9 @@ import com.payresolve.evidence.CaseEvidenceRepository;
 import com.payresolve.evidence.EvidenceKind;
 import com.payresolve.evidence.EvidenceSource;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,8 +66,18 @@ public class CaseAttachmentController {
             .toList();
     }
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload multimodal evidence file (PNG, JPEG, PDF up to 4MB)")
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+        summary = "Upload multimodal evidence file (PNG, JPEG, PDF up to 4MB)",
+        responses = {
+            @ApiResponse(
+                responseCode = "201",
+                description = "Attachment uploaded and linked to case",
+                content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = AttachmentDto.class))
+            ),
+            @ApiResponse(responseCode = "413", description = "Attachment exceeds 4MB size limit")
+        }
+    )
     public ResponseEntity<?> uploadAttachment(
         @PathVariable String caseId,
         @RequestParam("file") MultipartFile file
@@ -118,8 +131,17 @@ public class CaseAttachmentController {
         }
     }
 
-    @PostMapping("/{attachmentId}/analyze")
-    @Operation(summary = "Trigger AI multimodal extraction for an uploaded attachment")
+    @PostMapping(value = "/{attachmentId}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+        summary = "Trigger AI multimodal extraction for an uploaded attachment",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "Multimodal evidence extracted successfully",
+                content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)
+            )
+        }
+    )
     public ResponseEntity<?> analyzeAttachment(
         @PathVariable String caseId,
         @PathVariable String attachmentId
