@@ -386,12 +386,12 @@ html.dark .react-flow__controls-button svg {
 .ag-theme-quartz,
 .ag-theme-quartz-dark {
   --ag-font-size: 13px !important;
-  --ag-header-height: 48px !important;
-  --ag-row-height: 60px !important;
+  --ag-header-height: 46px !important;
+  --ag-row-height: 52px !important;
   --ag-cell-horizontal-padding: 20px !important;
   --ag-header-column-separator-display: block !important;
-  --ag-header-column-separator-height: 20px !important;
-  --ag-header-column-separator-color: rgba(148, 163, 184, 0.3) !important;
+  --ag-header-column-separator-height: 18px !important;
+  --ag-header-column-separator-color: rgba(148, 163, 184, 0.25) !important;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   border: none !important;
 }
@@ -416,32 +416,13 @@ html.dark .react-flow__controls-button svg {
   --ag-data-color: #f8fafc !important;
 }
 
-/* Force AG Grid row and cells to take the specified row height */
-.ag-theme-quartz .ag-row,
-.ag-theme-quartz-dark .ag-row {
-  height: 60px !important;
-  line-height: 1.4 !important;
-  transition: background-color 0.15s ease;
-}
-
-.ag-theme-quartz .ag-cell,
-.ag-theme-quartz-dark .ag-cell {
-  height: 60px !important;
-  padding-left: 20px !important;
-  padding-right: 20px !important;
-  letter-spacing: -0.01em;
-  display: flex !important;
-  align-items: center !important;
-}
-
 .ag-theme-quartz .ag-header-cell,
 .ag-theme-quartz-dark .ag-header-cell {
-  height: 48px !important;
   padding-left: 20px !important;
   padding-right: 20px !important;
-  font-weight: 700 !important;
-  font-size: 11px !important;
-  letter-spacing: 0.05em !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em !important;
   text-transform: uppercase !important;
 }
 
@@ -451,6 +432,23 @@ html.dark .react-flow__controls-button svg {
 
 .ag-theme-quartz-dark .ag-header-cell-text {
   color: #94a3b8 !important;
+}
+
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz-dark .ag-cell {
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+  letter-spacing: -0.01em;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.ag-theme-quartz .ag-row {
+  transition: background-color 0.15s ease;
+}
+
+.ag-theme-quartz-dark .ag-row {
+  transition: background-color 0.15s ease;
 }
 
 /* Header border & subtle bottom separation */

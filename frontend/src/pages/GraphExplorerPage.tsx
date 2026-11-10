@@ -187,22 +187,22 @@ export default function GraphExplorerPage() {
       {
         field: 'label',
         headerName: 'Entity / Node',
-        minWidth: 240,
-        flex: 1.5,
+        minWidth: 200,
+        flex: 1.4,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => {
           const isMissing = params.data?.status === 'MISSING';
           return (
-            <div className="flex items-center gap-3 py-1 overflow-hidden">
+            <div className="flex items-center gap-2.5 py-1">
               <span
                 className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                   isMissing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
                 }`}
               />
-              <div className="flex flex-col justify-center min-w-0">
-                <span className="font-semibold text-slate-900 dark:text-white tracking-tight truncate leading-tight">
+              <div className="flex flex-col leading-snug">
+                <span className="font-semibold text-slate-900 dark:text-white tracking-tight">
                   {params.value}
                 </span>
-                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate leading-tight mt-0.5">
+                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
                   {params.data?.id}
                 </span>
               </div>
@@ -213,7 +213,7 @@ export default function GraphExplorerPage() {
       {
         field: 'type',
         headerName: 'Type',
-        minWidth: 160,
+        minWidth: 150,
         flex: 1,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => (
           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-medium bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60">
@@ -234,10 +234,10 @@ export default function GraphExplorerPage() {
       {
         field: 'externalId',
         headerName: 'External Reference',
-        minWidth: 180,
+        minWidth: 170,
         flex: 1,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => (
-          <span className="font-mono text-xs text-blue-600 dark:text-sky-400 font-medium">
+          <span className="font-mono text-xs text-blue-600 dark:text-sky-400">
             {params.value}
           </span>
         ),
@@ -245,12 +245,12 @@ export default function GraphExplorerPage() {
       {
         field: 'status',
         headerName: 'In-Graph Status',
-        width: 150,
+        width: 140,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => {
           const val = params.value;
           if (val === 'MISSING') {
             return (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-300/80 dark:border-amber-800/60">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-300/80 dark:border-amber-800/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                 Missing
               </span>
@@ -258,13 +258,13 @@ export default function GraphExplorerPage() {
           }
           if (val === 'DISCREPANT') {
             return (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-300/80 dark:border-rose-800/60">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-300/80 dark:border-rose-800/60">
                 Discrepant
               </span>
             );
           }
           return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-300/80 dark:border-emerald-800/60">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-300/80 dark:border-emerald-800/60">
               Confirmed
             </span>
           );
@@ -296,20 +296,22 @@ export default function GraphExplorerPage() {
       {
         field: 'edgesCount',
         headerName: 'Connected Edges',
-        width: 150,
+        width: 140,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
-            <GoogleIcon name="hub" size={15} className="text-blue-500" />
-            <span>{params.value} links</span>
-          </span>
+          <div className="flex items-center gap-1.5">
+            <GoogleIcon name="hub" size={15} className="text-slate-400 dark:text-slate-500" />
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 font-mono">
+              {params.value} links
+            </span>
+          </div>
         ),
       },
       {
         field: 'observedAt',
-        headerName: 'Observed Time',
-        width: 160,
+        headerName: 'Observed',
+        width: 110,
         cellRenderer: (params: ICellRendererParams<GraphNodeRow>) => (
-          <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
             {params.value}
           </span>
         ),
@@ -642,8 +644,6 @@ export default function GraphExplorerPage() {
                   rowData={filteredNodeRows}
                   columnDefs={nodeColumnDefs}
                   defaultColDef={defaultColDef}
-                  rowHeight={60}
-                  headerHeight={48}
                   animateRows={true}
                   rowSelection="single"
                   onGridReady={(e: GridReadyEvent) => setGridApi(e.api)}
@@ -658,8 +658,6 @@ export default function GraphExplorerPage() {
                   rowData={filteredEdgeRows}
                   columnDefs={edgeColumnDefs}
                   defaultColDef={defaultColDef}
-                  rowHeight={60}
-                  headerHeight={48}
                   animateRows={true}
                   rowSelection="single"
                   onGridReady={(e: GridReadyEvent) => setGridApi(e.api)}
