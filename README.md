@@ -188,34 +188,14 @@ node scripts/postman-from-openapi.mjs
 
 In GitHub Actions CI (`.github/workflows/ci.yml`), the `api-tests` job starts a PostgreSQL service container, launches the backend with `DEMO_MODE=true` and mock values, executes the offline Newman suite, and uploads `postman-report.json` as a build artifact.
 
-### APIMatic Developer Portal & SDK Generation
+### OpenAPI Contract & APIMatic Integration
 
-PayResolve AI provides a complete OpenAPI 3.0.3 specification and an APIMatic Docs-as-Code developer portal under `apimatic-portal/` for merchant SDK distribution.
+PayResolve AI exports an OpenAPI `3.0.1` specification directly from Spring Boot `/v3/api-docs` ([OpenApiConfig.java](backend/src/main/java/com/payresolve/common/OpenApiConfig.java)) and synchronizes it across:
+- `frontend/src/types/openapi.json` (feeding `npm run codegen` -> `frontend/src/types/api.ts`)
+- `apimatic/payresolve-openapi.json` (validated offline via `@redocly/cli lint` with 0 errors)
+- `apimatic-portal/src/spec/payresolve-openapi.json` (with APIMatic Docs-as-Code config in `apimatic-portal/src/apimatic.json` and target SDK metadata in `apimatic/apimatic-meta.json`)
 
-1. **Validate API Specification**:
-   ```bash
-   apimatic api validate --file="apimatic/payresolve-openapi.json"
-   ```
-
-2. **Generate Static Documentation Portal**:
-   ```bash
-   cd apimatic-portal
-   apimatic portal generate
-   ```
-   This generates the full interactive API documentation portal with multi-language code snippets and API console at `apimatic-portal/portal/`.
-
-3. **Preview Portal Locally**:
-   ```bash
-   cd apimatic-portal
-   apimatic portal serve
-   ```
-   Opens a local web server with live reload at `http://localhost:8080`.
-
-4. **Multi-Language SDK Generation**:
-   APIMatic compiles native, type-safe client libraries from `apimatic/payresolve-openapi.json`:
-   - **TypeScript / Node.js**: `@payresolve/sdk`
-   - **Python**: `payresolve-sdk`
-   - **C# / .NET**: `PayResolve.Sdk`
+> Running APIMatic's cloud CLI (`@apimatic/cli@2` `api validate`, `sdk generate`, `portal generate`, `plugin generate`) requires **Node.js `>=22.14.0`** and interactive **`apimatic auth login`**, so generated SDKs (`@payresolve/sdk`, `payresolve-sdk`) and static portal artifacts are not yet built or published in this repository. See [apimatic/README.md](apimatic/README.md) for setup commands.
 
 ---
 
@@ -257,16 +237,17 @@ The backend runs as a Docker web service on Render and the frontend as a Render 
 
 ## Partner tools used
 
-| Tool | How we use it |
+| Tool | How we use it (verified in this repo) |
 |---|---|
 | PayPal Sandbox | Order creation, server-side capture, webhook signature verification, refund and capture lookups |
-| AG Grid Community | High-performance interactive grid powering the Payment Exception Queue and the dedicated **Evidence Graph Explorer** (`/graph-explorer`) for tabular topological inspection, confidence metrics, and CSV exports |
-| AG Studio | Operations telemetry dashboard with natural language operational assistant |
-| APIMatic | Complete OpenAPI 3.0.3 contract and Docs-as-Code Developer Portal (`apimatic-portal/`) generating type-safe multi-language SDKs (TypeScript `@payresolve/sdk`, Python `payresolve-sdk`, C#) for merchant integrations |
-| Render | Containerized cloud hosting defined via Infrastructure-as-Code in `infra/render.yaml` |
-| Postman | Comprehensive testing collection and environment in `postman/` for end-to-end PayPal flows and API verification |
-| Google Gemini & Groq | Dual-engine AI layer: Gemini 2.0 Flash for multimodal evidence analysis and Groq LLaMA 3.3 for sub-second deterministic rule-grounded root-cause investigations |
-| Supabase | Production PostgreSQL database instance with automated keep-alive orchestration |
+| AG Grid Community (`36.3.0`) | Theming API (`themeQuartz`), sorting, column/quick filtering, pagination, left-pinned IDs, `localStorage` column persistence, and CSV export across Exception Queue, Event Inbox, Actions & Audit Ledger, and Evidence Graph Explorer (`/graph-explorer`) |
+| AG Charts Community (`14.3.0`) | Accessible bar, donut, and line/area telemetry charts with `sr-only` data tables and light/dark CSS-token theming across `/operations`, `/benchmark`, and `/cases/:id` |
+| AG Studio (`3.1.0`) | Customizable `/operations` dashboard widgets (`createWidgets`) and Operations Assistant panel (trial license via `VITE_AG_LICENSE` optional) |
+| APIMatic | Synced SpringDoc OpenAPI `3.0.1` contract (`apimatic/payresolve-openapi.json`), target SDK config (`apimatic/apimatic-meta.json`), and Docs-as-Code portal config (`apimatic-portal/`); cloud SDK/portal CLI generation awaits Node `>=22.14.0` and `apimatic auth login` |
+| Render | Docker web service + static site blueprint (`infra/render.yaml`) with schema validation CI workflow (`.github/workflows/render-blueprint-validate.yml`) and health ping (`.github/workflows/render-health-ping.yml`) |
+| Postman & Newman | Structured `offline` collection (`auth`, `queue`, `case`, `events`, `actions`, `benchmark` — 21 requests, 132 OpenAPI JSON-schema/RBAC/CSRF assertions), manual `sandbox` folder (11 requests), OpenAPI skeleton generator, and Portman config (`postman/`) |
+| Google Gemini & Groq | Dual-engine AI layer: Gemini for multimodal attachment extraction and Groq for rule-grounded root-cause investigations, with deterministic database grounding |
+| Supabase | PostgreSQL hosting via Session Pooler with `.github/workflows/supabase-keepalive.yml` |
 
 ## Team
 
