@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { EvidenceGraphView } from '../components/EvidenceGraphView';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { BarChartCard } from '../components/charts/BarChartCard';
+import { DonutChartCard } from '../components/charts/DonutChartCard';
+import { SEMANTIC_COLORS } from '../lib/chartTheme';
 import { api, ApiError, type InvestigationSummaryDto, type ProposedActionDto } from '../lib/api';
 import { toast } from '../lib/toast';
 import { TableSkeleton, ErrorState, EmptyState } from '../components/DataStates';
@@ -72,6 +75,13 @@ export default function CaseDetailsPage() {
   const { data: llmCalls = [], refetch: refetchLlmCalls } = useQuery({
     queryKey: ['case-llm-calls', id],
     queryFn: () => api.investigator.getLlmCalls(id),
+    enabled: !!id,
+  });
+
+  // 7. Fetch Latest Persisted Investigation (with investigation_steps latencies)
+  const latestInvestigationQuery = useQuery({
+    queryKey: ['case-investigation-latest', id],
+    queryFn: () => api.investigator.getLatestForCase(id),
     enabled: !!id,
   });
 
@@ -158,14 +168,63 @@ export default function CaseDetailsPage() {
     mutationFn: () => api.investigator.investigate(id),
     onSuccess: (data) => {
       setInvestigationResult(data);
+      queryClient.setQueryData(['case-investigation-latest', id], data);
       queryClient.invalidateQueries({ queryKey: ['case', id] });
       queryClient.invalidateQueries({ queryKey: ['case-actions', id] });
+      queryClient.invalidateQueries({ queryKey: ['case-llm-calls', id] });
       toast.success('Investigation completed with deterministic verification.');
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : 'Investigation failed.');
     },
   });
+
+  const activeInvestigation = investigationResult || latestInvestigationQuery.data;
+
+  // Derived Evidence Coverage Breakdown (Confirmed, Conflicting, Missing) from real graph nodes
+  const evidenceCoverageDonutData = useMemo(() => {
+    const nodes = graphData?.nodes || [];
+    if (nodes.length === 0) return [];
+    let confirmed = 0;
+    let conflicting = 0;
+    let missing = 0;
+    nodes.forEach((n) => {
+      if (n.isMissing || n.status === 'MISSING') {
+        missing += 1;
+      } else if (
+        n.status === 'MISMATCH' ||
+        n.status === 'CONFLICT' ||
+        n.status === 'DISCREPANCY' ||
+        n.status === 'FAILED' ||
+        n.metadata?.discrepancy === true
+      ) {
+        conflicting += 1;
+      } else {
+        confirmed += 1;
+      }
+    });
+    if (conflicting === 0 && (activeInvestigation?.report?.conflicts?.length ?? 0) > 0) {
+      conflicting = activeInvestigation?.report?.conflicts?.length ?? 0;
+    }
+    return [
+      { category: 'Confirmed', count: confirmed, fill: SEMANTIC_COLORS.confirmed },
+      { category: 'Conflicting', count: conflicting, fill: SEMANTIC_COLORS.conflicting },
+      { category: 'Missing', count: missing, fill: SEMANTIC_COLORS.missing },
+    ].filter((row) => row.count > 0);
+  }, [activeInvestigation?.report?.conflicts?.length, graphData?.nodes]);
+
+  const toolCalls = useMemo(
+    () =>
+      (activeInvestigation?.steps || []).map((s, idx) => ({
+        stepLabel: `#${idx + 1} ${s.tool || 'tool'}`,
+        toolName: s.tool || 'toolCall',
+        latencyMs: Number(s.latencyMs ?? 0),
+      })),
+    [activeInvestigation?.steps]
+  );
+
+  // Investigation report: prefer persisted/live report; show real status notice if not yet run
+  const report = activeInvestigation?.report;
 
   if (caseLoading) {
     return (
@@ -237,29 +296,6 @@ export default function CaseDetailsPage() {
         Resolved
       </span>
     );
-
-  // Investigation details: fallback to canonical data if not yet run
-  const report = investigationResult?.report || {
-    status: 'CAUSE_FOUND',
-    confirmed: ['PayPal capture COMPLETED for $84.50. Cited: capture, order'],
-    conflicts: ['Shop order still PENDING after the capture. Cited: shop order'],
-    missing: ['No processed update after the second webhook delivery.'],
-    recommendedAction: {
-      type: 'SYNC_ORDER_STATUS',
-      reason: 'Reconcile shop order status with verified PayPal payment capture',
-    },
-  };
-
-  const toolCalls = (investigationResult?.steps || []).map((s) => ({
-    toolName: s.tool || 'toolCall',
-    latencyMs: Number(s.latencyMs || 120),
-  }));
-  const displayToolCalls = toolCalls.length > 0 ? toolCalls : [
-    { toolName: 'getPayPalOrder', latencyMs: 140 },
-    { toolName: 'getCaptureDetails', latencyMs: 212 },
-    { toolName: 'listWebhookEvents', latencyMs: 64 },
-    { toolName: 'getShopOrder', latencyMs: 38 },
-  ];
 
   return (
     <AppLayout>
@@ -405,7 +441,11 @@ export default function CaseDetailsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
               <span className="px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal">
-                {report.status === 'DEGRADED' ? 'Degraded rule fallback' : '3 of 3 citations verified'}
+                {report?.status === 'DEGRADED'
+                ? 'Degraded rule fallback'
+                : report
+                ? 'Citations verified'
+                : 'Awaiting AI run'}
               </span>
             </div>
 
@@ -429,58 +469,98 @@ export default function CaseDetailsPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-              {displayToolCalls.map((tc, idx) => (
-                <span
-                  key={idx}
-                  className="px-2.5 py-1 rounded-full border border-blue-400/60 dark:border-blue-700/60 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
-                >
-                  {tc.toolName} {tc.latencyMs} ms
-                </span>
-              ))}
+            {toolCalls.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                {toolCalls.map((tc, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded-full border border-blue-400/60 dark:border-blue-700/60 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                  >
+                    {tc.toolName} {tc.latencyMs} ms
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Case Telemetry Charts (AG Charts Community) */}
+            <div className="grid grid-cols-1 gap-4">
+              <DonutChartCard
+                title="Case Evidence Coverage"
+                description="Confirmed, conflicting, and missing evidence items in this case DAG."
+                data={evidenceCoverageDonutData}
+                angleKey="count"
+                calloutLabelKey="category"
+                fills={evidenceCoverageDonutData.map((d) => d.fill)}
+                heightClassName="h-52"
+                emptyMessage="No evidence nodes derived yet."
+                lastUpdated={caseData.updatedAt}
+              />
+
+              <BarChartCard
+                title="Investigation Tool-Call Latencies"
+                description="Measured read-only tool latencies from persisted investigation_steps."
+                data={toolCalls}
+                xKey="stepLabel"
+                xLabel="Tool Step"
+                series={[{ yKey: 'latencyMs', yName: 'Latency (ms)', fill: SEMANTIC_COLORS.primary }]}
+                yAxisTitle="Duration (ms)"
+                valueSuffix=" ms"
+                heightClassName="h-52"
+                isLoading={latestInvestigationQuery.isLoading || investigateMutation.isPending}
+                emptyMessage="Run an AI investigation to measure real tool-call latencies."
+                lastUpdated={activeInvestigation?.finishedAt || activeInvestigation?.startedAt}
+              />
             </div>
 
             {/* Structured findings */}
-            <div className="space-y-3.5 text-xs sm:text-sm">
-              {report.confirmed && report.confirmed.length > 0 && (
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 block">Confirmed</span>
-                  <p className="text-slate-700 dark:text-slate-300">
-                    {report.confirmed.join(' ')}
-                  </p>
-                </div>
-              )}
+            {report ? (
+              <div className="space-y-3.5 text-xs sm:text-sm">
+                {report.confirmed && report.confirmed.length > 0 && (
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 block">Confirmed</span>
+                    <p className="text-slate-700 dark:text-slate-300">
+                      {report.confirmed.join(' ')}
+                    </p>
+                  </div>
+                )}
 
-              {report.conflicts && report.conflicts.length > 0 && (
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-rose-600 dark:text-rose-400 block">Conflict</span>
-                  <p className="text-slate-700 dark:text-slate-300">
-                    {report.conflicts.join(' ')}
-                  </p>
-                </div>
-              )}
+                {report.conflicts && report.conflicts.length > 0 && (
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-rose-600 dark:text-rose-400 block">Conflict</span>
+                    <p className="text-slate-700 dark:text-slate-300">
+                      {report.conflicts.join(' ')}
+                    </p>
+                  </div>
+                )}
 
-              {report.missing && report.missing.length > 0 && (
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-amber-600 dark:text-amber-400 block">Missing</span>
-                  <p className="text-slate-700 dark:text-slate-300">
-                    {report.missing.join(' ')}
-                  </p>
-                </div>
-              )}
-            </div>
+                {report.missing && report.missing.length > 0 && (
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-amber-600 dark:text-amber-400 block">Missing</span>
+                    <p className="text-slate-700 dark:text-slate-300">
+                      {report.missing.join(' ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                No AI investigation persisted for this case yet. Click <strong>Run investigator</strong> above to inspect read-only PayPal and merchant records.
+              </div>
+            )}
 
             {/* Blue Recommended Callout Box */}
-            <div className="p-4 rounded-xl bg-[#edf3fa] dark:bg-[#131d2e] border border-blue-200/50 dark:border-blue-900/50 space-y-1">
-              <span className="text-xs font-semibold text-slate-900 dark:text-white block">Recommended</span>
-              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">
-                {report.recommendedAction?.type === 'SYNC_ORDER_STATUS'
-                  ? 'Sync order status to PAID. Needs approval.'
-                  : report.recommendedAction?.type === 'HOLD_REFUND'
-                  ? 'Hold refund flag on order. Needs approval.'
-                  : 'Manual operator review recommended.'}
-              </p>
-            </div>
+            {report && (
+              <div className="p-4 rounded-xl bg-[#edf3fa] dark:bg-[#131d2e] border border-blue-200/50 dark:border-blue-900/50 space-y-1">
+                <span className="text-xs font-semibold text-slate-900 dark:text-white block">Recommended</span>
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+                  {report.recommendedAction?.type === 'SYNC_ORDER_STATUS'
+                    ? 'Sync order status to PAID. Needs approval.'
+                    : report.recommendedAction?.type === 'HOLD_REFUND'
+                    ? 'Hold refund flag on order. Needs approval.'
+                    : 'Manual operator review recommended.'}
+                </p>
+              </div>
+            )}
 
             {/* Action buttons (only displayed when proposed action exists) */}
             {proposedAction ? (

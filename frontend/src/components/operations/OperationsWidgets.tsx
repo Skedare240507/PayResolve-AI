@@ -1,12 +1,13 @@
 import React from 'react';
 import type { AgWidgetParams } from 'ag-studio';
 import { GoogleIcon } from '../GoogleIcon';
-import type { CaseRecord, BenchmarkResultDto, EventInboxItemDto } from '../../lib/api';
+import type { CaseRecord, BenchmarkResultDto, EventInboxItemDto, StatsOverviewDto } from '../../lib/api';
 
 export interface OperationsContext {
   cases?: CaseRecord[];
   events?: EventInboxItemDto[];
   benchmark?: BenchmarkResultDto | null;
+  stats?: StatsOverviewDto | null;
   isDark?: boolean;
 }
 
@@ -67,13 +68,11 @@ export const CasesByTypeWidget: React.FC<AgWidgetParams<any, any, OperationsCont
     counts[t].totalMinor += c.amountMinor || 0;
   });
 
-  // Ensure default demo counts if empty
-  const totalCases = cases.length > 0 ? cases.length : 12;
+  const totalCases = cases.length;
   const entries = Object.entries(typeConfig).map(([key, meta]) => {
     const data = counts[key] || { count: 0, totalMinor: 0 };
-    const fallbackCount = key === 'PAID_NOT_MARKED' ? 4 : key === 'AMOUNT_MISMATCH' ? 2 : key === 'DUPLICATE_EVENT' ? 3 : key === 'REFUND_MISMATCH' ? 2 : 1;
-    const count = cases.length > 0 ? data.count : fallbackCount;
-    const pct = Math.round((count / totalCases) * 100);
+    const count = data.count;
+    const pct = totalCases > 0 ? Math.round((count / totalCases) * 100) : 0;
     return {
       key,
       ...meta,
@@ -143,10 +142,11 @@ export const CasesByTypeWidget: React.FC<AgWidgetParams<any, any, OperationsCont
  */
 export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsContext>> = ({ context }) => {
   const benchmark = context?.benchmark;
-  const medianTimeSeconds = benchmark?.medianTimeToCauseSeconds ?? 1.2;
+  const statsBench = context?.stats?.benchmarkComparison;
+  const medianTimeSeconds = benchmark?.medianTimeToCauseSeconds ?? (statsBench?.aiInvestigatorTimeMs ? statsBench.aiInvestigatorTimeMs / 1000 : null);
   const manualTimeSeconds = 2700; // 45 minutes typical merchant triage across multiple portals
-  const speedupX = Math.round(manualTimeSeconds / (medianTimeSeconds || 1.2));
-  const groundingRate = benchmark?.groundingRatePct ?? 100.0;
+  const speedupX = medianTimeSeconds && medianTimeSeconds > 0 ? Math.round(manualTimeSeconds / medianTimeSeconds) : 0;
+  const groundingRate = benchmark?.groundingRatePct ?? statsBench?.groundingRatePct ?? null;
 
   return (
     <div className="h-full w-full p-5 bg-white dark:bg-[#131b26] rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col justify-between overflow-y-auto">
@@ -162,7 +162,7 @@ export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsCont
             </div>
           </div>
           <span className="text-xs px-2.5 py-0.5 rounded-full border border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-bold">
-            {speedupX.toLocaleString()}x Faster
+            {speedupX > 0 ? `${speedupX.toLocaleString()}x Faster` : 'Not run'}
           </span>
         </div>
 
@@ -188,7 +188,7 @@ export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsCont
                 <GoogleIcon name="auto_awesome" size={13} className="text-blue-600 dark:text-blue-400" />
               </span>
               <span className="font-mono font-bold text-[#0066cc] dark:text-blue-400">
-                {medianTimeSeconds.toFixed(1)} s
+                {medianTimeSeconds != null ? `${medianTimeSeconds.toFixed(1)} s` : '—'}
               </span>
             </div>
             <div className="w-full h-2 bg-blue-100 dark:bg-blue-950 rounded-full overflow-hidden">
@@ -204,7 +204,7 @@ export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsCont
       <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
         <span className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 font-medium">
           <GoogleIcon name="task_alt" size={13} />
-          <span>{groundingRate.toFixed(1)}% grounding rate</span>
+          <span>{groundingRate != null ? `${groundingRate.toFixed(1)}% grounding rate` : 'No benchmark run'}</span>
         </span>
         <span>0 hallucinated IDs</span>
       </div>
@@ -218,14 +218,15 @@ export const TimeToCauseWidget: React.FC<AgWidgetParams<any, any, OperationsCont
  */
 export const EvidenceCoverageWidget: React.FC<AgWidgetParams<any, any, OperationsContext>> = ({ context }) => {
   const cases = context?.cases || [];
-  const total = cases.length > 0 ? cases.length : 12;
+  const coverageStats = context?.stats?.evidenceCoverageByType || [];
+  const total = cases.length;
 
-  // Breakdown of verified vs missing link items
-  const confirmedCount = 42;
-  const missingCount = 8;
+  // Derived strictly from real /api/stats/overview aggregates
+  const confirmedCount = coverageStats.reduce((sum, item) => sum + (item.confirmedNodes || 0), 0);
+  const missingCount = coverageStats.reduce((sum, item) => sum + (item.missingNodes || 0), 0);
   const totalItems = confirmedCount + missingCount;
-  const confirmedPct = Math.round((confirmedCount / totalItems) * 100);
-  const missingPct = 100 - confirmedPct;
+  const confirmedPct = totalItems > 0 ? Math.round((confirmedCount / totalItems) * 100) : 0;
+  const missingPct = totalItems > 0 ? 100 - confirmedPct : 0;
 
   return (
     <div className="h-full w-full p-5 bg-white dark:bg-[#131b26] rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs flex flex-col justify-between overflow-y-auto">

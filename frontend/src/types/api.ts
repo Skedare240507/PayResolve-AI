@@ -195,6 +195,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cases/{caseId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List attachments for a case */
+        get: operations["listAttachments"];
+        put?: never;
+        /** Upload multimodal evidence file (PNG, JPEG, PDF up to 4MB) */
+        post: operations["uploadAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{caseId}/attachments/{attachmentId}/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trigger AI multimodal extraction for an uploaded attachment */
+        post: operations["analyzeAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/seed": {
         parameters: {
             query?: never;
@@ -331,6 +366,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the Operations agent questions about queue metrics, cases, and benchmark results */
+        post: operations["chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/actions/{id}/reject": {
         parameters: {
             query?: never;
@@ -382,6 +434,23 @@ export interface paths {
         patch: operations["updateStatus"];
         trace?: never;
     };
+    "/api/stats/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve aggregated operational telemetry overview across cases, evidence graphs, webhooks, and benchmarks */
+        get: operations["getStatsOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shop/products": {
         parameters: {
             query?: never;
@@ -425,6 +494,23 @@ export interface paths {
         };
         /** List refunds for a shop order */
         get: operations["getRefunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-calls/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve recent system-wide LLM routing telemetry calls */
+        get: operations["getRecentLlmCalls"];
         put?: never;
         post?: never;
         delete?: never;
@@ -544,6 +630,40 @@ export interface paths {
         };
         /** Get chronological evidence timeline for a case */
         get: operations["getCaseTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{id}/llm-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve all AI LLM calls and provider routing telemetry for a case */
+        get: operations["getCaseLlmCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{id}/investigations/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve the latest persisted AI investigation and step latencies for a case */
+        get: operations["getLatestInvestigationForCase"];
         put?: never;
         post?: never;
         delete?: never;
@@ -695,10 +815,20 @@ export interface components {
             /** Format: double */
             total?: number;
             customerLabel?: string;
+            items?: components["schemas"]["ShopOrderItemDto"][];
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        ShopOrderItemDto: {
+            /** Format: int64 */
+            id?: number;
+            productId?: string;
+            /** Format: int32 */
+            quantity?: number;
+            /** Format: int64 */
+            unitPriceMinor?: number;
         };
         ShipmentRequestDto: {
             carrier?: string;
@@ -770,6 +900,8 @@ export interface components {
             status?: string;
             /** Format: int32 */
             tries?: number;
+            /** Format: int32 */
+            deliveryCount?: number;
             at?: string;
             /** Format: date-time */
             receivedAt?: string;
@@ -902,6 +1034,9 @@ export interface components {
             actualOutcome?: string;
             /** Format: int64 */
             durationMs?: number;
+            expectedEvidenceIds?: string[];
+            actualEvidenceIds?: string[];
+            description?: string;
         };
         BenchmarkResultDto: {
             id?: string;
@@ -921,6 +1056,23 @@ export interface components {
             medianTimeToCauseSeconds?: number;
             caseOutcomes?: boolean[];
             cases?: components["schemas"]["BenchmarkCaseDetail"][];
+            /** Format: double */
+            ruleTimeToCauseMs?: number;
+            /** Format: double */
+            investigatorTimeToCauseSeconds?: number;
+            /** Format: double */
+            manualTimeToCauseMinutes?: number;
+            replayTest?: components["schemas"]["ReplayTestSummary"];
+        };
+        ReplayTestSummary: {
+            /** Format: int32 */
+            attempts?: number;
+            /** Format: int32 */
+            businessEffectsApplied?: number;
+            /** Format: int32 */
+            duplicatesBlocked?: number;
+            idempotent?: boolean;
+            eventId?: string;
         };
         SignUpRequest: {
             username: string;
@@ -953,6 +1105,14 @@ export interface components {
             resetUrl?: string;
             demoNotice?: string;
         };
+        ChatRequest: {
+            message?: string;
+        };
+        ChatResponse: {
+            reply?: string;
+            provider?: string;
+            fallbackUsed?: boolean;
+        };
         CaseStatusUpdateRequest: {
             status: string;
         };
@@ -976,6 +1136,63 @@ export interface components {
             resolvedAt?: string;
             summary?: string;
         };
+        BenchmarkComparisonDto: {
+            benchmarkId?: string;
+            /** Format: date-time */
+            runAt?: string;
+            /** Format: int32 */
+            sampleSize?: number;
+            /** Format: int32 */
+            passedCases?: number;
+            /** Format: double */
+            ruleTimeMs?: number;
+            /** Format: double */
+            aiInvestigatorTimeMs?: number;
+            /** Format: double */
+            precisionPct?: number;
+            /** Format: double */
+            recallPct?: number;
+            /** Format: double */
+            groundingRatePct?: number;
+        };
+        CategoryCountDto: {
+            type?: string;
+            typeLabel?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        EvidenceCoverageByTypeDto: {
+            type?: string;
+            typeLabel?: string;
+            /** Format: int32 */
+            confirmedNodes?: number;
+            /** Format: int32 */
+            missingNodes?: number;
+        };
+        HourlyWebhookStatDto: {
+            hourIso?: string;
+            hourLabel?: string;
+            /** Format: int32 */
+            totalReceived?: number;
+            /** Format: int32 */
+            duplicateDeliveries?: number;
+        };
+        SeverityCountDto: {
+            severity?: string;
+            /** Format: int32 */
+            count?: number;
+        };
+        StatsOverviewDto: {
+            /** Format: date-time */
+            generatedAt?: string;
+            /** Format: int32 */
+            totalCases?: number;
+            casesByType?: components["schemas"]["CategoryCountDto"][];
+            casesBySeverity?: components["schemas"]["SeverityCountDto"][];
+            evidenceCoverageByType?: components["schemas"]["EvidenceCoverageByTypeDto"][];
+            webhooksByHour?: components["schemas"]["HourlyWebhookStatDto"][];
+            benchmarkComparison?: components["schemas"]["BenchmarkComparisonDto"];
+        };
         ProductDto: {
             id?: string;
             name?: string;
@@ -985,6 +1202,27 @@ export interface components {
             /** Format: double */
             price?: number;
             description?: string;
+        };
+        LlmCallRecord: {
+            /** Format: int64 */
+            id?: number;
+            caseId?: string;
+            provider?: string;
+            model?: string;
+            callType?: string;
+            /** Format: int32 */
+            promptTokens?: number;
+            /** Format: int32 */
+            completionTokens?: number;
+            /** Format: int64 */
+            latencyMs?: number;
+            costEstUsd?: number;
+            status?: string;
+            fallbackUsed?: boolean;
+            fallbackReason?: string;
+            snapshotHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
         };
         EventStatsDto: {
             /** Format: int64 */
@@ -1059,10 +1297,21 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AttachmentDto: {
+            id?: string;
+            caseId?: string;
+            filename?: string;
+            contentType?: string;
+            /** Format: int64 */
+            fileSize?: number;
+            extractedData?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         CsrfToken: {
+            headerName?: string;
             token?: string;
             parameterName?: string;
-            headerName?: string;
         };
         AuditLogEntryDto: {
             /** Format: int64 */
@@ -1458,6 +1707,80 @@ export interface operations {
             };
         };
     };
+    listAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AttachmentDto"][];
+                };
+            };
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    analyzeAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     seedCases: {
         parameters: {
             query?: never;
@@ -1638,6 +1961,30 @@ export interface operations {
             };
         };
     };
+    chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChatResponse"];
+                };
+            };
+        };
+    };
     rejectAction: {
         parameters: {
             query?: never;
@@ -1708,6 +2055,26 @@ export interface operations {
             };
         };
     };
+    getStatsOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregated telemetry overview retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsOverviewDto"];
+                };
+            };
+        };
+    };
     getProducts: {
         parameters: {
             query?: never;
@@ -1768,6 +2135,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RefundResponseDto"][];
+                };
+            };
+        };
+    };
+    getRecentLlmCalls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LlmCallRecord"][];
                 };
             };
         };
@@ -1926,6 +2313,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EvidenceTimelineDto"];
+                };
+            };
+        };
+    };
+    getCaseLlmCalls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LlmCallRecord"][];
+                };
+            };
+        };
+    };
+    getLatestInvestigationForCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvestigationResponseDto"];
                 };
             };
         };

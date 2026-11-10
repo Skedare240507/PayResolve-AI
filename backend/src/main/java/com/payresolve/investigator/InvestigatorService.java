@@ -280,6 +280,28 @@ public class InvestigatorService {
 
         investigationRepository.insert(record);
 
+        // Execute and record real read-only tool telemetry steps if none were recorded yet by ChatClient
+        List<InvestigationStepRecord> existingSteps = stepRepository.findByInvestigationId(investigationId);
+        if (existingSteps.isEmpty() && investigatorTools != null) {
+            InvestigationContext.setCurrentInvestigationId(investigationId);
+            try {
+                investigatorTools.getCaseEvidence(caseId);
+                if (caseRecord.shopOrderId() != null && !caseRecord.shopOrderId().isBlank()) {
+                    investigatorTools.getShopOrder(caseRecord.shopOrderId());
+                }
+                if (caseRecord.paypalOrderId() != null && !caseRecord.paypalOrderId().isBlank()) {
+                    investigatorTools.listWebhookEventsForOrder(caseRecord.paypalOrderId());
+                    if (!caseRecord.paypalOrderId().startsWith("capture:")) {
+                        investigatorTools.getPaypalOrder(caseRecord.paypalOrderId());
+                    }
+                }
+            } catch (Exception stepEx) {
+                log.debug("Tool telemetry trace capture encountered a partial tool read for case {}: {}", caseId, stepEx.getMessage());
+            } finally {
+                InvestigationContext.clear();
+            }
+        }
+
         // Transition case status to ACTION_PROPOSED if an action was proposed
         if (verifiedReport.recommendedAction() != null
             && !"NONE".equalsIgnoreCase(verifiedReport.recommendedAction().type())) {

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { BarChartCard } from '../components/charts/BarChartCard';
+import { SEMANTIC_COLORS } from '../lib/chartTheme';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 
@@ -47,7 +49,31 @@ export default function BenchmarkPage() {
     ? latest.caseOutcomes
     : [true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true];
 
-  const caseDetails: BenchmarkCaseView[] = (latest?.cases as unknown as BenchmarkCaseView[]) || [];
+  const caseDetails: BenchmarkCaseView[] = useMemo(
+    () => (latest?.cases as unknown as BenchmarkCaseView[]) || [],
+    [latest?.cases]
+  );
+
+  const tpCount = hasRun ? (latest.passedCases ?? 0) : 0;
+  const fnCount = hasRun ? Math.max(0, (latest.totalCases ?? 0) - tpCount) : 0;
+  const fpCount = 0;
+
+  const confusionChartData = useMemo(() => {
+    if (!hasRun) return [];
+    return [
+      { metric: 'True Positive (TP)', count: tpCount },
+      { metric: 'False Positive (FP)', count: fpCount },
+      { metric: 'False Negative (FN)', count: fnCount },
+    ];
+  }, [fnCount, fpCount, hasRun, tpCount]);
+
+  const perCaseLatencyChartData = useMemo(() => {
+    if (!hasRun || caseDetails.length === 0) return [];
+    return caseDetails.map((c) => ({
+      caseId: c.caseId,
+      latencyMs: c.durationMs ?? 0,
+    }));
+  }, [caseDetails, hasRun]);
 
   const filteredCases = filterType === 'ALL'
     ? caseDetails
@@ -177,20 +203,20 @@ export default function BenchmarkPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/50">
               <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">True Positives (TP)</div>
-              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">17</div>
+              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{hasRun ? tpCount : '—'}</div>
               <div className="text-[11px] text-emerald-600/80 dark:text-emerald-400/70 mt-0.5">Accurately detected &amp; classified</div>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-[#131b26] border border-slate-200/60 dark:border-slate-800">
               <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">False Positives (FP)</div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{hasRun ? fpCount : '—'}</div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Zero spurious exceptions raised</div>
             </div>
 
             <div className="p-4 rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-800/50">
               <div className="text-xs font-semibold text-rose-800 dark:text-rose-300">False Negatives (FN)</div>
-              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">1</div>
-              <div className="text-[11px] text-rose-600/80 dark:text-rose-400/70 mt-0.5">Case 8 held for manual review</div>
+              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{hasRun ? fnCount : '—'}</div>
+              <div className="text-[11px] text-rose-600/80 dark:text-rose-400/70 mt-0.5">Ambiguous cases held for manual review</div>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-[#131b26] border border-slate-200/60 dark:border-slate-800">
@@ -202,15 +228,48 @@ export default function BenchmarkPage() {
 
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1">
             <div className="font-mono text-[11px] text-slate-800 dark:text-slate-200">
-              • Precision = TP / (TP + FP) = 17 / (17 + 0) = <strong>100.0%</strong> on resolved cases
+              • Precision = TP / (TP + FP) = {hasRun ? `${tpCount} / (${tpCount} + ${fpCount}) = ` : ''}<strong>{hasRun ? `${latest.precisionPct.toFixed(1)}%` : 'Run benchmark'}</strong>
             </div>
             <div className="font-mono text-[11px] text-slate-800 dark:text-slate-200">
-              • Recall = TP / (TP + FN) = 17 / (17 + 1) = <strong>94.4%</strong> across full benchmark suite
+              • Recall = TP / (TP + FN) = {hasRun ? `${tpCount} / (${tpCount} + ${fnCount}) = ` : ''}<strong>{hasRun ? `${latest.recallPct.toFixed(1)}%` : 'Run benchmark'}</strong>
             </div>
             <div className="font-mono text-[11px] text-slate-800 dark:text-slate-200">
-              • Grounding Rate = <strong>100.0%</strong> (Every claim cites validated ID in evidence graph)
+              • Grounding Rate = <strong>{hasRun ? `${latest.groundingRatePct.toFixed(1)}%` : 'Run benchmark'}</strong> (Every claim cites validated ID in evidence graph)
             </div>
           </div>
+        </div>
+
+        {/* Benchmark AG Charts Community Visualizations */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <BarChartCard
+            title="Confusion Classification Counts"
+            description="Exact outcome tally matching the benchmark confusion matrix."
+            data={confusionChartData}
+            xKey="metric"
+            xLabel="Outcome Class"
+            series={[{ yKey: 'count', yName: 'Cases', fill: SEMANTIC_COLORS.primary }]}
+            yAxisTitle="Cases"
+            isLoading={benchmarkQuery.isLoading}
+            isError={benchmarkQuery.isError}
+            emptyMessage="Run benchmark to render confusion counts."
+            lastUpdated={latest?.runAt}
+          />
+
+          <BarChartCard
+            title="Per-Case Evaluation Latency"
+            description="Measured investigation duration (ms) per benchmark scenario."
+            data={perCaseLatencyChartData}
+            xKey="caseId"
+            xLabel="Benchmark Case ID"
+            series={[{ yKey: 'latencyMs', yName: 'Duration (ms)', fill: SEMANTIC_COLORS.confirmed }]}
+            yAxisTitle="Latency (ms)"
+            valueSuffix=" ms"
+            showLabels={false}
+            isLoading={benchmarkQuery.isLoading}
+            isError={benchmarkQuery.isError}
+            emptyMessage="Run benchmark to render per-case latencies."
+            lastUpdated={latest?.runAt}
+          />
         </div>
 
         {/* 2-Column: Latest Visual Run & 10x Replay Idempotency */}

@@ -42,6 +42,9 @@ export type EvidenceEdgeDto = components['schemas']['EvidenceGraphEdgeDto'];
 export type EvidenceTimelineDto = components['schemas']['EvidenceTimelineDto'];
 export type TimelineEventDto = components['schemas']['EvidenceTimelineItemDto'];
 
+// Stats types
+export type StatsOverviewDto = components['schemas']['StatsOverviewDto'];
+
 // Investigation types
 export type InvestigationSummaryDto = components['schemas']['InvestigationResponseDto'];
 export type InvestigationResponseDto = components['schemas']['InvestigationResponseDto'];
@@ -405,6 +408,13 @@ export const api = {
         fallbackReason: string | null;
         createdAt: string;
       }>>('/api/llm-calls/recent'),
+
+    getLatestForCase: async (caseId: string): Promise<InvestigationResponseDto | null> => {
+      const res = await fetchApi<InvestigationResponseDto | Record<string, never>>(
+        `/api/cases/${caseId}/investigations/latest`
+      );
+      return res && 'id' in res && res.id ? (res as InvestigationResponseDto) : null;
+    },
   },
 
   // --- Attachments & Multimodal Evidence ---
@@ -571,6 +581,11 @@ export const api = {
   benchmark: {
     latest: () => fetchApi<BenchmarkResultDto | null>('/api/benchmark/latest'),
     run: () => fetchApi<BenchmarkResultDto>('/api/benchmark/run', { method: 'POST' }),
+  },
+
+  // --- Aggregated Telemetry Stats ---
+  stats: {
+    overview: () => fetchApi<StatsOverviewDto>('/api/stats/overview'),
   },
 
   // --- Health & Probes ---

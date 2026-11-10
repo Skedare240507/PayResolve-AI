@@ -2,12 +2,15 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AgStudio, createWidgets } from 'ag-studio-react';
 import { AgStudioLicenseManager, studioTheme } from 'ag-studio';
-import { LicenseManager } from 'ag-grid-enterprise';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { api } from '../lib/api';
 import { useTheme } from '../lib/theme';
+import { SEMANTIC_COLORS } from '../lib/chartTheme';
+import { BarChartCard } from '../components/charts/BarChartCard';
+import { DonutChartCard } from '../components/charts/DonutChartCard';
+import { LineAreaChartCard } from '../components/charts/LineAreaChartCard';
 import {
   CasesByTypeWidget,
   TimeToCauseWidget,
@@ -21,7 +24,6 @@ const agLicense = import.meta.env.VITE_AG_LICENSE;
 if (agLicense) {
   try {
     AgStudioLicenseManager.setLicenseKey(agLicense);
-    LicenseManager.setLicenseKey(agLicense);
   } catch {
     // ignore
   }
@@ -48,80 +50,54 @@ export default function OperationsPage() {
     queryFn: () => api.benchmark.latest(),
   });
 
+  const statsQuery = useQuery({
+    queryKey: ['stats', 'overview'],
+    queryFn: () => api.stats.overview(),
+  });
+
+  const statsData = statsQuery.data;
   const casesList = useMemo(() => casesData?.content || [], [casesData?.content]);
   const eventsList = useMemo(() => eventsData?.content || [], [eventsData?.content]);
 
-  // Studio data sources with seed fallbacks so AG Studio schema discovery never encounters empty sources
+  const hasStudioData =
+    casesList.length > 0 || eventsList.length > 0 || (benchmarkData?.cases?.length ?? 0) > 0;
+
+  // Real API rows only — never synthesize placeholder rows
   const studioData = useMemo(() => {
-    const caseRows = casesList.length > 0
-      ? casesList.map((c) => ({
-          id: c.id,
-          category: c.typeLabel || c.type,
-          orderId: c.order,
-          amountMinor: c.amountMinor,
-          severity: c.severity,
-          status: c.status,
-          age: c.age,
-        }))
-      : [
-          {
-            id: 'CASE-SEED-1',
-            category: 'PAID_NOT_MARKED',
-            orderId: 'ORD-1001',
-            amountMinor: 2499,
-            severity: 'HIGH',
-            status: 'OPEN',
-            age: '12m',
-          },
-        ];
+    const caseRows = casesList.map((c) => ({
+      id: c.id,
+      category: c.typeLabel || c.type,
+      orderId: c.order,
+      amountMinor: c.amountMinor,
+      severity: c.severity,
+      status: c.status,
+      age: c.age,
+    }));
 
-    const eventRows = eventsList.length > 0
-      ? eventsList.map((e) => ({
-          id: e.id,
-          eventId: e.eventId || e.paypalEventId,
-          eventType: e.type,
-          signature: e.signature,
-          status: e.status,
-          tries: e.tries,
-        }))
-      : [
-          {
-            id: 'EVT-SEED-1',
-            eventId: 'WH-1001',
-            eventType: 'PAYMENT.CAPTURE.COMPLETED',
-            signature: 'VALID',
-            status: 'PROCESSED',
-            tries: 1,
-          },
-        ];
+    const eventRows = eventsList.map((e) => ({
+      id: e.id,
+      eventId: e.eventId || e.paypalEventId,
+      eventType: e.type,
+      signature: e.signature,
+      status: e.status,
+      tries: e.tries,
+    }));
 
-    const benchmarkRows = (benchmarkData?.cases && benchmarkData.cases.length > 0)
-      ? benchmarkData.cases.map((b) => ({
-          caseId: b.caseId,
-          type: b.type,
-          status: b.passed ? 'PASSED' : 'MISS',
-          expected: b.expectedOutcome,
-          actual: b.actualOutcome,
-          latencyMs: b.durationMs,
-        }))
-      : [
-          {
-            caseId: 'CASE-SEED-1',
-            type: 'PAID_NOT_MARKED',
-            status: 'PASSED',
-            expected: 'MARK_PAID',
-            actual: 'MARK_PAID',
-            latencyMs: 250,
-          },
-        ];
+    const benchmarkRows = (benchmarkData?.cases || []).map((b) => ({
+      caseId: b.caseId,
+      type: b.type,
+      status: b.passed ? 'PASSED' : 'MISS',
+      expected: b.expectedOutcome,
+      actual: b.actualOutcome,
+      latencyMs: b.durationMs,
+    }));
 
-    return {
-      sources: [
-        { id: 'cases', data: caseRows },
-        { id: 'events', data: eventRows },
-        { id: 'benchmark', data: benchmarkRows },
-      ],
-    };
+    const sources: Array<{ id: string; data: Array<Record<string, unknown>> }> = [];
+    if (caseRows.length > 0) sources.push({ id: 'cases', data: caseRows });
+    if (eventRows.length > 0) sources.push({ id: 'events', data: eventRows });
+    if (benchmarkRows.length > 0) sources.push({ id: 'benchmark', data: benchmarkRows });
+
+    return { sources };
   }, [casesList, eventsList, benchmarkData]);
 
   // Context passed into custom widgets
@@ -130,9 +106,10 @@ export default function OperationsPage() {
       cases: casesList,
       events: eventsList,
       benchmark: benchmarkData,
+      stats: statsData,
       isDark,
     };
-  }, [casesList, eventsList, benchmarkData, isDark]);
+  }, [casesList, eventsList, benchmarkData, statsData, isDark]);
 
   // Register Custom Widgets
   const widgetsConfig = useMemo(() => {
@@ -274,52 +251,237 @@ export default function OperationsPage() {
           </div>
         )}
 
-        {/* 4 Summary Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Total Exceptions</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {casesList.length > 0 ? casesList.length : 12}
+        {/* 4 Summary Stat Cards (Real API Aggregates Only) */}
+        {(() => {
+          const totalCasesCount = statsData?.totalCases ?? casesList.length;
+          const totalConfirmed = (statsData?.evidenceCoverageByType || []).reduce(
+            (sum, item) => sum + (item.confirmedNodes || 0),
+            0
+          );
+          const totalMissing = (statsData?.evidenceCoverageByType || []).reduce(
+            (sum, item) => sum + (item.missingNodes || 0),
+            0
+          );
+          const totalNodes = totalConfirmed + totalMissing;
+          const integrityPct = totalNodes > 0 ? Math.round((totalConfirmed / totalNodes) * 100) : null;
+          const medianLatency = benchmarkData?.medianTimeToCauseSeconds;
+          const benchSample = benchmarkData?.totalCases ?? statsData?.benchmarkComparison?.sampleSize;
+          const groundingPct = benchmarkData?.groundingRatePct ?? statsData?.benchmarkComparison?.groundingRatePct;
+
+          return (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Total Exceptions</div>
+                <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  {totalCasesCount}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">
+                  {statsData?.casesByType?.length ? `Across ${statsData.casesByType.length} detector categories` : 'No cases recorded yet'}
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Investigation Latency</div>
+                <div className="text-3xl sm:text-4xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {medianLatency != null ? `${medianLatency.toFixed(1)} s` : '—'}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">
+                  {benchSample ? `Median AI latency (n=${benchSample})` : 'Run benchmark to measure'}
+                </div>
+              </div>
+
+              <div
+                className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
+                title="AI Grounding Formula: (Verified cited entity IDs / Total cited entity IDs) * 100"
+              >
+                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">AI Grounding Rate</div>
+                <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  {groundingPct != null ? `${groundingPct.toFixed(1)}%` : '—'}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">
+                  Formula: Verified citations / total cited
+                </div>
+              </div>
+
+              <div
+                className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
+                title="Evidence Integrity Formula: (Confirmed evidence links / Total expected evidence links) * 100"
+              >
+                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Evidence Integrity</div>
+                <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                  {integrityPct != null ? `${integrityPct}%` : '—'}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">
+                  Formula: {totalNodes > 0 ? `${totalConfirmed} confirmed / ${totalMissing} missing` : 'Confirmed links vs missing'}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">Across 5 detector categories</div>
+          );
+        })()}
+
+        {/* Charts Section (Independent of AG Studio — Powered by AG Charts Community MIT) */}
+        <section aria-label="Telemetry Charts" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                Live Operational Telemetry
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Real-time charts rendered with AG Charts Community from <code className="font-mono">/api/stats/overview</code>.
+              </p>
+            </div>
+            <span className="self-start sm:self-auto px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              AG Charts Community (MIT)
+            </span>
           </div>
 
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Investigation Latency</div>
-            <div className="text-3xl sm:text-4xl font-bold text-emerald-600 dark:text-emerald-400">
-              {benchmarkData?.medianTimeToCauseSeconds ? `${benchmarkData.medianTimeToCauseSeconds.toFixed(1)} s` : '1.2 s'}
-            </div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">
-              Median latency (n={benchmarkData?.totalCases || 18}) &middot; Manual: 45 min (assumed)
-            </div>
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* 1. Cases by Type (Horizontal Bar) */}
+            <BarChartCard
+              title="Cases by Exception Type"
+              description="Distribution across PayPal reconciliation detector categories."
+              data={(statsData?.casesByType || []).map((c) => ({
+                label: c.typeLabel || c.type || 'Unknown',
+                count: c.count ?? 0,
+              }))}
+              xKey="label"
+              xLabel="Exception Type"
+              direction="horizontal"
+              series={[{ yKey: 'count', yName: 'Cases', fill: SEMANTIC_COLORS.primary }]}
+              yAxisTitle="Case Count"
+              isLoading={statsQuery.isLoading}
+              isError={statsQuery.isError}
+              emptyMessage="No exception cases detected yet."
+              lastUpdated={statsData?.generatedAt}
+            />
 
-          <div
-            className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
-            title="AI Grounding Formula: (Verified cited entity IDs / Total cited entity IDs) * 100"
-          >
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">AI Grounding Rate</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {benchmarkData?.groundingRatePct ? `${benchmarkData.groundingRatePct.toFixed(1)}%` : '100.0%'}
-            </div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">
-              Formula: Verified citations / total cited
-            </div>
-          </div>
+            {/* 2. Severity Mix (Donut) */}
+            {(() => {
+              const sevColorMap: Record<string, string> = {
+                HIGH: '#dc2626',
+                MEDIUM: '#d97706',
+                LOW: '#059669',
+              };
+              const sevOrder: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+              const severityRows = [...(statsData?.casesBySeverity || [])]
+                .sort((a, b) => (sevOrder[a.severity ?? 'MEDIUM'] ?? 9) - (sevOrder[b.severity ?? 'MEDIUM'] ?? 9))
+                .map((s) => ({
+                  severity: s.severity || 'MEDIUM',
+                  count: s.count ?? 0,
+                  fill: sevColorMap[s.severity || 'MEDIUM'] ?? '#0284c7',
+                }));
+              return (
+                <DonutChartCard
+                  title="Severity Mix"
+                  description="Active discrepancies segmented by risk level."
+                  data={severityRows}
+                  angleKey="count"
+                  calloutLabelKey="severity"
+                  fills={severityRows.map((r) => r.fill)}
+                  isLoading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                  emptyMessage="No severity breakdown available yet."
+                  lastUpdated={statsData?.generatedAt}
+                />
+              );
+            })()}
 
-          <div
-            className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
-            title="Evidence Integrity Formula: (Confirmed evidence links / Total expected evidence links) * 100"
-          >
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Evidence Integrity</div>
-            <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {casesList.length > 0 ? `${Math.round(((casesList.filter(c => c.status !== 'OPEN').length + 1) / (casesList.length + 1)) * 100)}%` : '84.0%'}
-            </div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">
-              Formula: Confirmed links vs missing
+            {/* 3. Investigation Time: Rule-only vs AI Investigator (Benchmark data, n shown, no manual baseline) */}
+            <BarChartCard
+              title="Rule-Only vs AI Investigator Latency"
+              description={
+                statsData?.benchmarkComparison
+                  ? `Measured median comparison from benchmark run (n=${statsData.benchmarkComparison.sampleSize}).`
+                  : 'Run benchmark to measure rule-only vs AI investigator latency.'
+              }
+              data={
+                statsData?.benchmarkComparison
+                  ? [
+                      {
+                        stage: `Rule Snapshot Detector (n=${statsData.benchmarkComparison.sampleSize})`,
+                        latencyMs: statsData.benchmarkComparison.ruleTimeMs ?? 0,
+                      },
+                      {
+                        stage: `AI Investigator + Verifier (n=${statsData.benchmarkComparison.sampleSize})`,
+                        latencyMs: statsData.benchmarkComparison.aiInvestigatorTimeMs ?? 0,
+                      },
+                    ]
+                  : []
+              }
+              xKey="stage"
+              xLabel="Investigation Stage"
+              direction="vertical"
+              series={[{ yKey: 'latencyMs', yName: 'Latency (ms)', fill: SEMANTIC_COLORS.secondary }]}
+              yAxisTitle="Duration (ms)"
+              valueSuffix=" ms"
+              isLoading={statsQuery.isLoading}
+              isError={statsQuery.isError}
+              emptyMessage="No benchmark run executed yet."
+              lastUpdated={statsData?.benchmarkComparison?.runAt}
+            />
+
+            {/* 4. Evidence Coverage: Confirmed vs Missing by Case Type (Stacked Bar) */}
+            <BarChartCard
+              title="Evidence Coverage by Case Type"
+              description="Confirmed PayPal/shop nodes versus dashed missing invariant links."
+              data={(statsData?.evidenceCoverageByType || []).map((cov) => ({
+                category: cov.typeLabel || cov.type || 'Unknown',
+                confirmed: cov.confirmedNodes ?? 0,
+                missing: cov.missingNodes ?? 0,
+              }))}
+              xKey="category"
+              xLabel="Case Type"
+              direction="vertical"
+              series={[
+                { yKey: 'confirmed', yName: 'Confirmed Nodes', fill: SEMANTIC_COLORS.confirmed, stacked: true },
+                { yKey: 'missing', yName: 'Missing Invariants', fill: SEMANTIC_COLORS.missing, stacked: true },
+              ]}
+              yAxisTitle="Evidence Graph Nodes"
+              isLoading={statsQuery.isLoading}
+              isError={statsQuery.isError}
+              emptyMessage="No evidence graphs derived yet."
+              lastUpdated={statsData?.generatedAt}
+            />
+
+            {/* 5. Webhook Events Received per Hour with Duplicate Deliveries Highlighted (Area / Line) */}
+            <div className="lg:col-span-2">
+              <LineAreaChartCard
+                title="Webhook Events Received per Hour"
+                description="Verified deliveries vs deduplicated replay attempts grouped by UTC hour."
+                data={(statsData?.webhooksByHour || []).map((w) => ({
+                  hour: w.hourLabel || w.hourIso || 'Unknown',
+                  totalReceived: w.totalReceived ?? 0,
+                  duplicateDeliveries: w.duplicateDeliveries ?? 0,
+                }))}
+                xKey="hour"
+                xLabel="Hour (UTC)"
+                yAxisTitle="Event Count"
+                series={[
+                  {
+                    yKey: 'totalReceived',
+                    yName: 'Total Deliveries',
+                    type: 'area',
+                    stroke: '#2563eb',
+                    fill: '#2563eb',
+                    markerShape: 'circle',
+                  },
+                  {
+                    yKey: 'duplicateDeliveries',
+                    yName: 'Duplicate Deliveries',
+                    type: 'line',
+                    stroke: '#d97706',
+                    markerShape: 'diamond',
+                    lineDash: [5, 5],
+                  },
+                ]}
+                isLoading={statsQuery.isLoading}
+                isError={statsQuery.isError}
+                emptyMessage="No webhook events received yet. Replay or send sandbox webhooks to plot traffic."
+                lastUpdated={statsData?.generatedAt}
+              />
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Operations Workspace Grid: AG Studio + Optional Agent Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -343,17 +505,29 @@ export default function OperationsPage() {
                 </div>
               </div>
 
-              {/* AG Studio Container */}
+              {/* AG Studio Container (strictly empty state if API has zero real rows) */}
               <div className="w-full h-[720px] relative">
-                <AgStudio<any>
-                  data={studioData}
-                  mode={studioMode}
-                  theme={studioActiveTheme}
-                  widgets={widgetsConfig}
-                  initialState={initialState}
-                  context={widgetContext}
-                  style={{ width: '100%', height: '100%' }}
-                />
+                {hasStudioData ? (
+                  <AgStudio<any>
+                    data={studioData}
+                    mode={studioMode}
+                    theme={studioActiveTheme}
+                    widgets={widgetsConfig}
+                    initialState={initialState}
+                    context={widgetContext}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center space-y-2 bg-slate-50/40 dark:bg-[#0b101a]/40">
+                    <GoogleIcon name="dashboard_customize" size={32} className="text-slate-400 dark:text-slate-500" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      No telemetry sources available yet
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">
+                      AG Studio widgets populate directly from live exception cases, webhooks, and benchmark runs without synthetic placeholder rows. Seed cases or run a detector scan to begin.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

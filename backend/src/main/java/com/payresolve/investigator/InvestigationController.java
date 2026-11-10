@@ -39,6 +39,17 @@ public class InvestigationController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/cases/{id}/investigations/latest")
+    @Operation(
+        operationId = "getLatestInvestigationForCase",
+        summary = "Retrieve the latest persisted AI investigation and step latencies for a case"
+    )
+    public ResponseEntity<InvestigationResponseDto> getLatestInvestigationForCase(@PathVariable String id) {
+        return investigatorService.getRecentInvestigationForCase(id)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/investigations/{id}")
     @Operation(summary = "Retrieve full details and auditable tool trace of an investigation by ID")
     public ResponseEntity<InvestigationResponseDto> getInvestigationById(@PathVariable String id) {
