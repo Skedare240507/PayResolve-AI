@@ -229,12 +229,13 @@ The backend runs as a Docker web service on Render and the frontend as a Render 
 | Tool | How we use it |
 |---|---|
 | PayPal Sandbox | Order creation, server-side capture, webhook signature verification, refund and capture lookups |
-| AG Grid and AG Studio | AG Grid Community for the exception queue & Graph Topology Explorer. AG Studio for the Operations dashboard and its assistant |
-| APIMatic | SDK generation config (`apimatic/`) & OpenAPI contract turning PayResolve into merchant client libraries (TypeScript, Python) |
-| Render | Hosting, defined in `infra/render.yaml` |
-| Postman | Collection in `postman/` for the PayPal flow and the API |
-| Groq and Gemini | The text and multimodal AI providers described above |
-| Supabase | Hosted PostgreSQL |
+| AG Grid Community | High-performance interactive grid powering the Payment Exception Queue and the dedicated **Evidence Graph Explorer** (`/graph-explorer`) for tabular topological inspection, confidence metrics, and CSV exports |
+| AG Studio | Operations telemetry dashboard with natural language operational assistant |
+| APIMatic | Complete OpenAPI 3.0.3 contract and Docs-as-Code Developer Portal (`apimatic-portal/`) generating type-safe multi-language SDKs (TypeScript `@payresolve/sdk`, Python `payresolve-sdk`, C#) for merchant integrations |
+| Render | Containerized cloud hosting defined via Infrastructure-as-Code in `infra/render.yaml` |
+| Postman | Comprehensive testing collection and environment in `postman/` for end-to-end PayPal flows and API verification |
+| Google Gemini & Groq | Dual-engine AI layer: Gemini 2.0 Flash for multimodal evidence analysis and Groq LLaMA 3.3 for sub-second deterministic rule-grounded root-cause investigations |
+| Supabase | Production PostgreSQL database instance with automated keep-alive orchestration |
 
 ## Team
 

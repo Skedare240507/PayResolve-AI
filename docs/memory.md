@@ -215,10 +215,15 @@ Keep to one line per session; roll old entries up when this grows.
   - Added CSV export via AG Grid API and quick-filter status chips with search.
   - Applied human-crafted design tokens in `index.css`: `Plus Jakarta Sans` with font feature settings (`cv02`, `cv03`), relaxed row heights (48px), 18px horizontal padding, custom scrollbars, and elevation borders across light and dark themes. Added navigation item in `AppLayout.tsx`. Build verified 100% green.
 - 2026-11-10: APIMatic Integration Setup & SDK Specification:
-  - Created `apimatic/` directory containing canonical OpenAPI 3.1 specification (`payresolve-openapi.json`) exported from SpringDoc.
-  - Configured `apimatic/apimatic-meta.json` generating production SDKs for TypeScript (`@payresolve/sdk`) and Python (`payresolve-sdk`) targeting both production Render and local sandbox.
-  - Documented merchant code integration patterns and judge verification in `apimatic/README.md`.
-  - Added APIMatic to partner tools section in `README.md`. Ready for APIMatic Context Plugin and developer SDK portal.
+  - Created `apimatic/` directory containing canonical OpenAPI 3.0.3 specification (`payresolve-openapi.json`).
+  - Resolved APIMatic validator errors and achieved clean `Succeeded` validation status (0 `$ref` sibling violations, 0 `*/*` wildcard media types, 100% schema examples across all 51 models, and concise operation summaries).
+  - Built production Docs-as-Code Developer Portal with `apimatic portal generate` in `apimatic-portal/` (56 static documentation and API explorer pages generated).
+  - Configured multi-language SDK compilation targeting TypeScript (`@payresolve/sdk`), Python (`payresolve-sdk`), and C# (`PayResolve.Sdk`).
+  - Documented merchant code integration patterns, judge verification, and updated `README.md` partner integrations table.
+- 2026-11-10: Evidence Graph Explorer AG Grid Layout Polish:
+  - Refined `/graph-explorer` AG Grid Community table with flush container card borders (eliminated double-padding).
+  - Upgraded row height to 52px, header height to 46px with column separators, 20px horizontal cell padding, uppercase header tracking, and custom 6px scrollbars for both light and dark themes.
+  - Verified production build and restarted Vite development server.
   2. Part 2 (Postman & Newman): Rebuilt `postman/PayResolve.postman_collection.json` into two distinct folders: `offline` (14 automated requests, 39 assertions, status codes, response shapes, zero secret leaks, CSRF requirement on action approval, VIEWER 403 Forbidden enforcement; 100% pass rate in Newman locally in 3.9s) and `sandbox` (manual PayPal Sandbox orders, capture, disputes, and webhook replay); added `scripts/postman-from-openapi.mjs` regenerating skeletons from `/v3/api-docs` using `openapi-to-postmanv2`; fixed SpringDoc base package filtering in `WebMvcConfig.java` and controller request mappings in `AgentChatController` and `CaseAttachmentController`; added `api-tests` job to `.github/workflows/ci.yml` running Postgres service, backend in demo mode, Newman runner, and uploading JSON test artifact; added "API tests with Postman" sections to `README.md` and `docs/DEPLOYMENT.md`.
   3. Part 3 (Astropods Plan - Stretch): Authored `docs/astropods-plan.md` outlining a read-only ops observer agent running in an Astropod container, strictly bounded to `VIEWER` credentials and read-only APIs (`GET /api/cases`, `/api/cases/{id}`, `/api/events`, `/api/benchmark/latest`, `/actuator/health`), with daily Slack standup briefings, anomaly spike alerts, and conversational inquiries. Planning only, stopped for user confirmation before building.
 - 2026-11-09: CI/CD & Deploy Diagnostics and Fixes:

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/@apimatic/cli@2/apimatic.schema.json",
+  "schemaVersion": 1,
+  "portal": {
+    "site": {
+      "name": "PayResolve AI Developer Portal",
+      "description": "Production developer documentation, API reference, and SDK downloads for PayResolve AI — PayPal AI Hackathon 2026."
+    },
+    "brand": {
+      "colors": {
+        "primary": "#2563eb"
+      },
+      "colorMode": "both"
+    },
+    "navigation": {
+      "links": [
+        {
+          "label": "Live Application",
+          "url": "https://payresolve-ai.onrender.com"
+        },
+        {
+          "label": "GitHub Repository",
+          "url": "https://github.com/Skedare240507/PayResolve-AI"
+        }
+      ]
+    },
+    "ai": {
+      "pageActions": true
+    }
+  },
+  "languages": {
+    "typescript": {},
+    "python": {},
+    "csharp": {}
+  },
+  "plugin": {
+    "pluginId": "payresolve-ai-assistant",
+    "pluginName": "PayResolve AI Operations Assistant",
+    "pluginVersion": "1.0.0",
+    "license": "MIT"
+  }
+}
