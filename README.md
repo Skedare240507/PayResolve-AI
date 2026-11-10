@@ -188,6 +188,37 @@ node scripts/postman-from-openapi.mjs
 
 In GitHub Actions CI (`.github/workflows/ci.yml`), the `api-tests` job starts a PostgreSQL service container, launches the backend with `DEMO_MODE=true` and mock values, executes the offline Newman suite, and uploads `postman-report.json` as a build artifact.
 
+### APIMatic Developer Portal & SDK Generation
+
+PayResolve AI provides a complete OpenAPI 3.0.3 specification and an APIMatic Docs-as-Code developer portal under `apimatic-portal/` for merchant SDK distribution.
+
+1. **Validate API Specification**:
+   ```bash
+   apimatic api validate --file="apimatic/payresolve-openapi.json"
+   ```
+
+2. **Generate Static Documentation Portal**:
+   ```bash
+   cd apimatic-portal
+   apimatic portal generate
+   ```
+   This generates the full interactive API documentation portal with multi-language code snippets and API console at `apimatic-portal/portal/`.
+
+3. **Preview Portal Locally**:
+   ```bash
+   cd apimatic-portal
+   apimatic portal serve
+   ```
+   Opens a local web server with live reload at `http://localhost:8080`.
+
+4. **Multi-Language SDK Generation**:
+   APIMatic compiles native, type-safe client libraries from `apimatic/payresolve-openapi.json`:
+   - **TypeScript / Node.js**: `@payresolve/sdk`
+   - **Python**: `payresolve-sdk`
+   - **C# / .NET**: `PayResolve.Sdk`
+
+---
+
 ## How the AI is wired
 
 The investigator calls tools that only read: the PayPal order and capture, webhook events for an order, the shop order, shipment details and the case's evidence. None of them can change data or move money.
@@ -244,7 +275,7 @@ We are two people.
 | Name | What they worked on |
 |---|---|
 | Rohan Gangawane ([LinkedIn](https://www.linkedin.com/in/rohan-gangawane/)) | Backend, database, AI integration, deployment |
-| [Teammate name] ([LinkedIn](add link)) | Frontend |
+| Sahil Kedare ([LinkedIn](https://www.linkedin.com/in/sahil-kedare24/)) | Frontend, UI design & design systems, AG Grid & APIMatic integration |
 
 We used AI coding assistants while building this project.
 
