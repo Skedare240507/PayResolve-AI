@@ -95,12 +95,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       {/* ─── DESKTOP SIDEBAR ─── */}
       <aside className="w-64 bg-[#0a0f1d] border-r border-[#151c2e] flex flex-col justify-between shrink-0 py-6 px-4 hidden md:flex h-full select-none z-20 text-slate-300">
         <div className="space-y-7">
-          {/* Brand Logo matching target image */}
-          <Link to="/" className="px-2 flex items-center space-x-2.5 cursor-pointer">
-            <span className="text-white font-bold text-lg tracking-tight">PayResolve</span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#1d4ed8] text-white tracking-wide">
-              AI
-            </span>
+          {/* Brand Logo — SVG mark + wordmark */}
+          <Link to="/" className="px-2 cursor-pointer">
+            <PayResolveLogo markSize={30} textColor="text-white" />
           </Link>
 
           {/* Target Navigation List */}
@@ -114,7 +111,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-all ${
                     active
                       ? 'bg-[#121c33] text-white font-semibold'
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                      : 'text-slate-300 hover:text-white hover:bg-white/[0.06]'
                   }`}
                 >
                   <div className="flex items-center space-x-3.5">
@@ -122,7 +119,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                       name={item.icon}
                       size={19}
                       className={`shrink-0 ${
-                        active ? 'text-[#3b82f6]' : 'text-slate-400'
+                        active ? 'text-[#3b82f6]' : 'text-slate-300'
                       }`}
                     />
                     <span>{item.label}</span>
