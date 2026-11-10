@@ -229,7 +229,8 @@ The backend runs as a Docker web service on Render and the frontend as a Render 
 | Tool | How we use it |
 |---|---|
 | PayPal Sandbox | Order creation, server-side capture, webhook signature verification, refund and capture lookups |
-| AG Grid and AG Studio | AG Grid for the exception queue. AG Studio for the Operations dashboard and its assistant |
+| AG Grid and AG Studio | AG Grid Community for the exception queue & Graph Topology Explorer. AG Studio for the Operations dashboard and its assistant |
+| APIMatic | SDK generation config (`apimatic/`) & OpenAPI contract turning PayResolve into merchant client libraries (TypeScript, Python) |
 | Render | Hosting, defined in `infra/render.yaml` |
 | Postman | Collection in `postman/` for the PayPal flow and the API |
 | Groq and Gemini | The text and multimodal AI providers described above |
