@@ -379,3 +379,40 @@ html.dark .react-flow__controls-button svg {
   background: #1e293b;
   border-radius: 3px;
 }
+
+/* ==========================================================================
+   AG Grid Community Human-Craft Polish (Typography, Spacing & Visual Depth)
+   ========================================================================== */
+.ag-theme-quartz,
+.ag-theme-quartz-dark {
+  --ag-font-size: 13px !important;
+  --ag-header-height: 44px !important;
+  --ag-row-height: 48px !important;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+.ag-theme-quartz .ag-header-cell,
+.ag-theme-quartz-dark .ag-header-cell {
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+  color: #64748b !important;
+}
+
+.ag-theme-quartz-dark .ag-header-cell {
+  color: #94a3b8 !important;
+}
+
+.ag-theme-quartz .ag-cell,
+.ag-theme-quartz-dark .ag-cell {
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+  letter-spacing: -0.01em;
+}
+
+/* Subtle elevation shadow for pinned headers */
+.ag-theme-quartz .ag-header {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+.ag-theme-quartz-dark .ag-header {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+}
