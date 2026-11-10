@@ -1,24 +1,71 @@
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { AgGridReact } from 'ag-grid-react';
+import type {
+  CellKeyDownEvent,
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+  ICellRendererParams,
+  ValueFormatterParams,
+} from 'ag-grid-community';
 import { AppLayout } from '../components/AppLayout';
+import { GoogleIcon } from '../components/GoogleIcon';
+import { CopyableIdCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, ApiError, type ProposedActionDto, type AuditLogEntryDto } from '../lib/api';
 import { toast } from '../lib/toast';
-import { CardSkeleton, TableSkeleton } from '../components/DataStates';
+import {
+  useGridTheme,
+  saveGridColumnState,
+  restoreGridColumnState,
+  resetGridColumnState,
+} from '../lib/gridTheme';
+import { CardSkeleton, ErrorState } from '../components/DataStates';
+
+const ACTIONS_COL_STATE_KEY = 'payresolve_grid_actions_cols_v1';
+
+interface ActionRow {
+  id: number;
+  caseId: string;
+  actionType: string;
+  status: string;
+  proposedBy: string;
+  decidedBy: string;
+  createdAtDate: Date | null;
+  description: string;
+}
+
+interface AuditRow {
+  id: number;
+  caseOrSubject: string;
+  action: string;
+  actor: string;
+  subjectType: string;
+  atDate: Date | null;
+  atFormatted: string;
+}
 
 export default function ActionsAuditPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { gridTheme } = useGridTheme();
+
+  const [ledgerTab, setLedgerTab] = useState<'actions' | 'audit'>('actions');
+  const [quickFilter, setQuickFilter] = useState('');
+  const gridRef = useRef<AgGridReact<ActionRow | AuditRow>>(null);
+  const [gridApi, setGridApi] = useState<GridApi<ActionRow | AuditRow> | null>(null);
 
   // Fetch proposed actions
   const actionsQuery = useQuery({
     queryKey: ['actions'],
-    queryFn: () => api.actions.list({ page: 0, size: 20 }),
+    queryFn: () => api.actions.list({ page: 0, size: 100 }),
   });
 
   // Fetch audit log entries
   const auditQuery = useQuery({
     queryKey: ['audit'],
-    queryFn: () => api.audit.list(0, 20),
+    queryFn: () => api.audit.list(0, 100),
   });
 
   // Approve mutation
@@ -104,38 +151,237 @@ export default function ActionsAuditPage() {
     }
   };
 
-  const formatActionStatus = (status?: string) => {
+  const formatActionStatusLabel = (status?: string) => {
     switch (status) {
       case 'PROPOSED':
-        return { label: 'Awaiting approval', color: 'border-amber-500/60 text-amber-600 dark:text-amber-400' };
+      case 'AWAITING_APPROVAL':
+        return 'Awaiting approval';
       case 'APPROVED':
-        return { label: 'Approved', color: 'border-emerald-500/60 text-emerald-600 dark:text-emerald-400' };
+      case 'EXECUTED':
+        return 'Approved';
       case 'REJECTED':
-        return { label: 'Rejected', color: 'border-slate-400 text-slate-500 dark:text-slate-400' };
+        return 'Rejected';
       default:
-        return { label: status || 'Pending', color: 'border-slate-400 text-slate-500 dark:text-slate-400' };
+        return status || 'Pending';
     }
   };
 
-  const formatAuditTime = (timestamp?: string) => {
-    if (!timestamp) return '--:--';
-    try {
-      const date = new Date(timestamp);
-      const dateStr = date.toISOString().slice(0, 10);
-      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-      return `${dateStr} ${timeStr}`;
-    } catch {
-      return timestamp;
+  const actionsList = useMemo(() => actionsQuery.data?.content || [], [actionsQuery.data?.content]);
+  const auditEntries = useMemo(() => auditQuery.data?.content || [], [auditQuery.data?.content]);
+
+  const actionRows: ActionRow[] = useMemo(
+    () =>
+      actionsList.map((a) => ({
+        id: Number(a.id ?? 0),
+        caseId: a.caseId || `ACT-${a.id ?? 0}`,
+        actionType: formatActionTitle(a.type),
+        status: formatActionStatusLabel(a.status),
+        proposedBy: a.proposedBy || 'AI',
+        decidedBy: a.decidedBy || '—',
+        createdAtDate: a.createdAt ? new Date(a.createdAt) : null,
+        description: formatActionDescription(a),
+      })),
+    [actionsList]
+  );
+
+  const auditRows: AuditRow[] = useMemo(
+    () =>
+      auditEntries.map((log: AuditLogEntryDto, idx) => {
+        const dt = log.at ? new Date(log.at) : null;
+        return {
+          id: Number(log.id ?? idx + 1),
+          caseOrSubject: log.subjectId || `LOG-${log.id ?? idx + 1}`,
+          action: log.action || 'EVENT',
+          actor: log.actor || 'system',
+          subjectType: log.subjectType || 'CASE',
+          atDate: dt,
+          atFormatted: dt
+            ? `${dt.toISOString().slice(0, 10)} ${dt.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              })}`
+            : '—',
+        };
+      }),
+    [auditEntries]
+  );
+
+  const actionColumns = useMemo<ColDef<ActionRow>[]>(
+    () => [
+      {
+        field: 'caseId',
+        headerName: 'Case ID',
+        pinned: 'left',
+        lockPinned: true,
+        width: 145,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'caseId',
+        cellRenderer: (params: ICellRendererParams<ActionRow>) => (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Link
+              to={`/case/${params.value}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-blue-600 dark:text-blue-400 font-semibold hover:underline truncate"
+            >
+              {params.value}
+            </Link>
+            <CopyableIdCell value={String(params.value || '')} displayText="" />
+          </div>
+        ),
+      },
+      {
+        field: 'id',
+        headerName: 'Action #',
+        width: 100,
+        filter: 'agNumberColumnFilter',
+        cellClass: 'font-mono text-xs',
+      },
+      {
+        field: 'actionType',
+        headerName: 'Action',
+        minWidth: 185,
+        flex: 1,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'description',
+      },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 155,
+        filter: 'agTextColumnFilter',
+        cellRenderer: (params: ICellRendererParams<ActionRow>) => (
+          <StatusPillCell status={params.value} />
+        ),
+      },
+      {
+        field: 'proposedBy',
+        headerName: 'Proposed By',
+        width: 120,
+        filter: 'agTextColumnFilter',
+      },
+      {
+        field: 'decidedBy',
+        headerName: 'Decided By',
+        width: 120,
+        filter: 'agTextColumnFilter',
+      },
+      {
+        field: 'createdAtDate',
+        headerName: 'Created',
+        width: 140,
+        filter: 'agDateColumnFilter',
+        cellClass: 'font-mono text-xs',
+        valueFormatter: (params: ValueFormatterParams<ActionRow, Date>) =>
+          params.value ? params.value.toLocaleTimeString([], { hour12: false }) : '',
+        tooltipValueGetter: (params) => (params.value ? params.value.toISOString() : ''),
+      },
+    ],
+    []
+  );
+
+  const auditColumns = useMemo<ColDef<AuditRow>[]>(
+    () => [
+      {
+        field: 'caseOrSubject',
+        headerName: 'Subject / Case',
+        pinned: 'left',
+        lockPinned: true,
+        width: 155,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'caseOrSubject',
+        cellRenderer: (params: ICellRendererParams<AuditRow>) => (
+          <CopyableIdCell value={String(params.value || '')} />
+        ),
+      },
+      {
+        field: 'id',
+        headerName: 'Entry #',
+        width: 95,
+        filter: 'agNumberColumnFilter',
+        cellClass: 'font-mono text-xs',
+      },
+      {
+        field: 'action',
+        headerName: 'Audit Event',
+        minWidth: 170,
+        flex: 1,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'action',
+      },
+      {
+        field: 'actor',
+        headerName: 'Actor',
+        width: 120,
+        filter: 'agTextColumnFilter',
+      },
+      {
+        field: 'subjectType',
+        headerName: 'Scope',
+        width: 110,
+        filter: 'agTextColumnFilter',
+      },
+      {
+        field: 'atDate',
+        headerName: 'Timestamp',
+        width: 175,
+        filter: 'agDateColumnFilter',
+        cellClass: 'font-mono text-xs',
+        valueFormatter: (params: ValueFormatterParams<AuditRow, Date>) =>
+          params.data?.atFormatted || (params.value ? params.value.toISOString() : ''),
+      },
+    ],
+    []
+  );
+
+  const defaultColDef = useMemo<ColDef>(
+    () => ({
+      sortable: true,
+      filter: true,
+      resizable: true,
+    }),
+    []
+  );
+
+  const storageKey = `${ACTIONS_COL_STATE_KEY}_${ledgerTab}`;
+
+  const onGridReady = useCallback(
+    (event: GridReadyEvent<ActionRow | AuditRow>) => {
+      setGridApi(event.api);
+      restoreGridColumnState(storageKey, event.api);
+    },
+    [storageKey]
+  );
+
+  const persistColumns = useCallback(() => {
+    if (gridApi) {
+      saveGridColumnState(storageKey, gridApi);
+    }
+  }, [gridApi, storageKey]);
+
+  const handleExportCsv = () => {
+    if (!gridApi) return;
+    gridApi.exportDataAsCsv({
+      fileName: ledgerTab === 'actions' ? 'payresolve_proposed_actions.csv' : 'payresolve_audit_log.csv',
+    });
+    toast.success(`Exported ${ledgerTab} CSV via AG Grid Community.`);
+  };
+
+  const handleCellKeyDown = (event: CellKeyDownEvent<ActionRow | AuditRow>) => {
+    const keyEvent = event.event as KeyboardEvent | undefined;
+    if (keyEvent?.key === 'Enter' && event.data && 'caseId' in event.data && event.data.caseId.startsWith('PR-')) {
+      navigate(`/case/${event.data.caseId}`);
     }
   };
 
-  const actionsList = actionsQuery.data?.content || [];
-  const auditEntries = auditQuery.data?.content || [];
+  const isLedgerLoading = ledgerTab === 'actions' ? actionsQuery.isLoading : auditQuery.isLoading;
+  const isLedgerError = ledgerTab === 'actions' ? actionsQuery.isError : auditQuery.isError;
+  const activeRowsCount = ledgerTab === 'actions' ? actionRows.length : auditRows.length;
 
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto space-y-7">
-        
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -158,26 +404,21 @@ export default function ActionsAuditPage() {
           </div>
         </div>
 
-        {/* 2-Column Content: Proposed Actions & Audit Log */}
+        {/* 2-Column Content: Action Approval Cards & AG Grid Community Ledger */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Left: Action Cards */}
-          <div className="lg:col-span-7 space-y-5">
+          {/* Left: Human-in-the-Loop Action Approval Queue */}
+          <div className="lg:col-span-5 space-y-4">
             {actionsQuery.isLoading ? (
               <div className="space-y-4">
                 <CardSkeleton />
                 <CardSkeleton />
               </div>
             ) : actionsQuery.isError ? (
-              <div className="p-6 bg-white dark:bg-[#0e1522] rounded-2xl border border-rose-300 dark:border-rose-900/60 text-center">
-                <p className="text-sm text-rose-600 dark:text-rose-400 font-medium">Failed to load proposed actions.</p>
-                <button
-                  onClick={() => actionsQuery.refetch()}
-                  className="mt-3 px-3 py-1.5 text-xs rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-                >
-                  Retry
-                </button>
-              </div>
+              <ErrorState
+                title="Failed to load proposed actions"
+                message="Could not retrieve action proposals."
+                onRetry={() => actionsQuery.refetch()}
+              />
             ) : actionsList.length === 0 ? (
               <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-8 text-center space-y-3 shadow-2xs">
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">No pending proposed actions</h2>
@@ -186,15 +427,15 @@ export default function ActionsAuditPage() {
                 </p>
                 <button
                   onClick={() => seedMutation.mutate()}
-                  className="px-4 py-2 rounded-lg bg-[#0066cc] text-white text-xs font-medium hover:bg-blue-600"
+                  className="px-4 py-2 rounded-lg bg-[#0066cc] text-white text-xs font-medium hover:bg-blue-600 cursor-pointer"
                 >
                   Seed sample actions
                 </button>
               </div>
             ) : (
               actionsList.map((act) => {
-                const statusMeta = formatActionStatus(act.status);
-                const isPending = act.status === 'PROPOSED';
+                const statusLabel = formatActionStatusLabel(act.status);
+                const isPending = act.status === 'PROPOSED' || act.status === 'AWAITING_APPROVAL';
                 const isActionMutating =
                   (approveMutation.isPending && approveMutation.variables === act.id) ||
                   (rejectMutation.isPending && rejectMutation.variables === act.id);
@@ -202,23 +443,21 @@ export default function ActionsAuditPage() {
                 return (
                   <div
                     key={act.id}
-                    className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs"
+                    className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 space-y-3.5 shadow-2xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center space-x-3">
-                        <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-2.5">
+                        <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                           {formatActionTitle(act.type)}
                         </h2>
-                        <span className={`px-3 py-0.5 rounded-full border text-xs font-normal ${statusMeta.color}`}>
-                          {statusMeta.label}
-                        </span>
+                        <StatusPillCell status={statusLabel} />
                       </div>
                       <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                         {act.caseId || `Action #${act.id}`}
                       </span>
                     </div>
 
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
                       {formatActionDescription(act)}
                     </p>
 
@@ -228,27 +467,24 @@ export default function ActionsAuditPage() {
                           <button
                             onClick={() => act.id && approveMutation.mutate(act.id)}
                             disabled={isActionMutating}
-                            className="px-5 py-2 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white font-medium text-xs sm:text-sm shadow-sm cursor-pointer transition-all disabled:opacity-50"
+                            className="px-4 py-1.5 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white font-medium text-xs shadow-sm cursor-pointer transition-all disabled:opacity-50"
                           >
                             {approveMutation.isPending && approveMutation.variables === act.id ? 'Approving...' : 'Approve'}
                           </button>
                           <button
                             onClick={() => act.id && rejectMutation.mutate(act.id)}
                             disabled={isActionMutating}
-                            className="px-5 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] font-medium text-xs sm:text-sm shadow-2xs cursor-pointer transition-all disabled:opacity-50"
+                            className="px-4 py-1.5 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] font-medium text-xs shadow-2xs cursor-pointer transition-all disabled:opacity-50"
                           >
                             {rejectMutation.isPending && rejectMutation.variables === act.id ? 'Rejecting...' : 'Reject'}
                           </button>
                         </>
                       ) : (
                         <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                          {act.status === 'APPROVED' ? 'Approved' : 'Rejected'}
+                          {statusLabel}
                           {act.decidedBy ? ` by ${act.decidedBy}` : ''}
                         </span>
                       )}
-                      <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
-                        Cited: capture, order
-                      </span>
                     </div>
                   </div>
                 );
@@ -256,55 +492,150 @@ export default function ActionsAuditPage() {
             )}
           </div>
 
-          {/* Right: Audit Log Card */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Audit log</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Append-only. Every proposal and decision is recorded.
-              </p>
+          {/* Right: AG Grid Community Ledger (Actions & Immutable Audit Trail) */}
+          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 space-y-4 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Actions &amp; Audit Ledger
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Append-only records powered by AG Grid Community.
+                </p>
+              </div>
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setLedgerTab('actions')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
+                    ledgerTab === 'actions'
+                      ? 'bg-white dark:bg-[#1e293b] text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  Actions ({actionRows.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLedgerTab('audit')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
+                    ledgerTab === 'audit'
+                      ? 'bg-white dark:bg-[#1e293b] text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  Audit log ({auditRows.length})
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              {auditQuery.isLoading ? (
-                <TableSkeleton rows={4} columns={4} />
-              ) : auditQuery.isError ? (
-                <div className="py-6 text-center text-xs text-rose-500">Failed to load audit records.</div>
-              ) : auditEntries.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">No audit records logged yet.</div>
-              ) : (
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400">
-                      <th className="py-2.5 pr-2 font-normal">Time</th>
-                      <th className="py-2.5 px-2 font-normal">Actor</th>
-                      <th className="py-2.5 px-2 font-normal">Action</th>
-                      <th className="py-2.5 pl-2 font-normal">Subject</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
-                    {auditEntries.map((log: AuditLogEntryDto, idx: number) => (
-                      <tr key={log.id ?? idx} className="hover:bg-slate-50/50 dark:hover:bg-[#121b2b]">
-                        <td className="py-3 pr-2 text-slate-500 dark:text-slate-400">
-                          {formatAuditTime(log.at)}
-                        </td>
-                        <td className="py-3 px-2 text-slate-700 dark:text-slate-300">
-                          {log.actor || 'system'}
-                        </td>
-                        <td className="py-3 px-2 text-slate-800 dark:text-slate-200 font-sans text-[11px] sm:text-xs">
-                          {log.action}
-                        </td>
-                        <td className="py-3 pl-2 text-slate-600 dark:text-slate-400 font-sans text-xs">
-                          {log.subjectType ? `${log.subjectType} ` : ''}{log.subjectId || ''}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            {/* Grid Controls: Quick Filter, Reset Columns, Export CSV */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <GoogleIcon name="search" size={15} />
+                </span>
+                <input
+                  type="text"
+                  aria-label="Quick filter actions or audit rows"
+                  placeholder="Quick filter case, action, actor..."
+                  value={quickFilter}
+                  onChange={(e) => setQuickFilter(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white bg-white dark:bg-[#131b26]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gridApi) {
+                      resetGridColumnState(storageKey, gridApi);
+                      toast.info('Reset ledger column layout.');
+                    }
+                  }}
+                  aria-label="Reset actions table columns"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <GoogleIcon name="restart_alt" size={14} />
+                  <span>Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={!gridApi || activeRowsCount === 0}
+                  aria-label="Export ledger table as CSV"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+                >
+                  <GoogleIcon name="download" size={14} />
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
+
+            {isLedgerError ? (
+              <ErrorState
+                title="Failed to load ledger records"
+                message="Could not load records from backend."
+                onRetry={() => (ledgerTab === 'actions' ? actionsQuery.refetch() : auditQuery.refetch())}
+              />
+            ) : (
+              <div
+                role="region"
+                aria-label="Actions and Audit Data Table"
+                className="w-full h-[460px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs"
+              >
+                {ledgerTab === 'actions' ? (
+                  <AgGridReact<ActionRow>
+                    ref={gridRef as React.RefObject<AgGridReact<ActionRow>>}
+                    key="actions-grid"
+                    theme={gridTheme}
+                    rowData={actionRows}
+                    columnDefs={actionColumns}
+                    defaultColDef={defaultColDef}
+                    loading={isLedgerLoading}
+                    quickFilterText={quickFilter}
+                    animateRows={true}
+                    pagination={true}
+                    paginationPageSize={10}
+                    paginationPageSizeSelector={[10, 20, 50]}
+                    rowSelection={{ mode: 'singleRow', enableClickSelection: true, checkboxes: false }}
+                    tooltipShowDelay={300}
+                    overlayNoRowsTemplate='<span class="text-xs text-slate-500">No proposed actions recorded.</span>'
+                    onGridReady={onGridReady as (e: GridReadyEvent<ActionRow>) => void}
+                    onColumnMoved={persistColumns}
+                    onColumnResized={persistColumns}
+                    onColumnPinned={persistColumns}
+                    onSortChanged={persistColumns}
+                    onCellKeyDown={handleCellKeyDown as (e: CellKeyDownEvent<ActionRow>) => void}
+                  />
+                ) : (
+                  <AgGridReact<AuditRow>
+                    ref={gridRef as React.RefObject<AgGridReact<AuditRow>>}
+                    key="audit-grid"
+                    theme={gridTheme}
+                    rowData={auditRows}
+                    columnDefs={auditColumns}
+                    defaultColDef={defaultColDef}
+                    loading={isLedgerLoading}
+                    quickFilterText={quickFilter}
+                    animateRows={true}
+                    pagination={true}
+                    paginationPageSize={10}
+                    paginationPageSizeSelector={[10, 20, 50]}
+                    rowSelection={{ mode: 'singleRow', enableClickSelection: true, checkboxes: false }}
+                    tooltipShowDelay={300}
+                    overlayNoRowsTemplate='<span class="text-xs text-slate-500">No audit records logged.</span>'
+                    onGridReady={onGridReady as (e: GridReadyEvent<AuditRow>) => void}
+                    onColumnMoved={persistColumns}
+                    onColumnResized={persistColumns}
+                    onColumnPinned={persistColumns}
+                    onSortChanged={persistColumns}
+                  />
+                )}
+              </div>
+            )}
           </div>
-
         </div>
       </div>
     </AppLayout>

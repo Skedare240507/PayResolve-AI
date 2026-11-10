@@ -2,25 +2,19 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import {
-  ModuleRegistry,
-  AllCommunityModule,
-  type ColDef,
-  type ICellRendererParams,
-  type GridReadyEvent,
-  type GridApi,
+import type {
+  ColDef,
+  ICellRendererParams,
+  GridReadyEvent,
+  GridApi,
 } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { CountUp } from '../components/CountUp';
 import { api, type EvidenceGraphDto, type EvidenceNodeDto, type EvidenceEdgeDto } from '../lib/api';
-import { useTheme } from '../lib/theme';
+import { useGridTheme } from '../lib/gridTheme';
 import { TableSkeleton, ErrorState, EmptyState } from '../components/DataStates';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 // Row structure for Nodes Grid
 interface GraphNodeRow {
@@ -51,7 +45,7 @@ interface GraphEdgeRow {
 }
 
 export default function GraphExplorerPage() {
-  const { isDark } = useTheme();
+  const { gridTheme } = useGridTheme();
 
   const [activeTab, setActiveTab] = useState<'nodes' | 'edges'>('nodes');
   const [selectedCaseId, setSelectedCaseId] = useState<string>('PR-0142');
@@ -426,8 +420,6 @@ export default function GraphExplorerPage() {
     }
   };
 
-  const agThemeClass = isDark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz';
-
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -634,18 +626,19 @@ export default function GraphExplorerPage() {
             </div>
           ) : (
             <div
-              className={`w-full ${agThemeClass}`}
+              className="w-full"
               style={{
                 height: 520,
               }}
             >
               {activeTab === 'nodes' ? (
                 <AgGridReact<GraphNodeRow>
+                  theme={gridTheme}
                   rowData={filteredNodeRows}
                   columnDefs={nodeColumnDefs}
                   defaultColDef={defaultColDef}
                   animateRows={true}
-                  rowSelection="single"
+                  rowSelection={{ mode: 'singleRow', enableClickSelection: true }}
                   onGridReady={(e: GridReadyEvent) => setGridApi(e.api)}
                   onRowClicked={(event) => {
                     if (event.data?.externalId && event.data.externalId !== '—') {
@@ -655,11 +648,12 @@ export default function GraphExplorerPage() {
                 />
               ) : (
                 <AgGridReact<GraphEdgeRow>
+                  theme={gridTheme}
                   rowData={filteredEdgeRows}
                   columnDefs={edgeColumnDefs}
                   defaultColDef={defaultColDef}
                   animateRows={true}
-                  rowSelection="single"
+                  rowSelection={{ mode: 'singleRow', enableClickSelection: true }}
                   onGridReady={(e: GridReadyEvent) => setGridApi(e.api)}
                 />
               )}

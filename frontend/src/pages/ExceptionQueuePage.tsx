@@ -1,27 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule, type ColDef, type ICellRendererParams } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
+import type {
+  CellKeyDownEvent,
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+  ICellRendererParams,
+  ValueFormatterParams,
+} from 'ag-grid-community';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { CountUp } from '../components/CountUp';
+import { CopyableIdCell, SeverityPillCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, type CaseRecord } from '../lib/api';
 import { toast } from '../lib/toast';
-import { useTheme } from '../lib/theme';
-import { TableSkeleton, ErrorState, EmptyState } from '../components/DataStates';
+import {
+  useGridTheme,
+  saveGridColumnState,
+  restoreGridColumnState,
+  resetGridColumnState,
+} from '../lib/gridTheme';
+import { ErrorState, EmptyState } from '../components/DataStates';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+const QUEUE_COL_STATE_KEY = 'payresolve_grid_queue_cols_v1';
 
 interface GridCaseRow {
   id: string;
   type: string;
   order: string;
+  amountMinor: number;
   amount: string;
   severity: 'High' | 'Medium' | 'Low';
+  openedAtDate: Date | null;
   age: string;
   status: 'Open' | 'Investigating' | 'Proposed' | 'Resolved';
   raw: CaseRecord;
@@ -118,6 +131,10 @@ export default function ExceptionQueuePage() {
     },
   });
 
+  const gridRef = useRef<AgGridReact<GridCaseRow>>(null);
+  const [gridApi, setGridApi] = useState<GridApi<GridCaseRow> | null>(null);
+  const { gridTheme } = useGridTheme();
+
   // Map API records to grid rows (real rows only, no mock fallback)
   const rowData: GridCaseRow[] = useMemo(() => {
     const rawList = pagedData?.content || [];
@@ -137,8 +154,10 @@ export default function ExceptionQueuePage() {
         id: c.id || 'PR-0000',
         type: c.typeLabel || formatCaseType(c.type),
         order: orderNum,
+        amountMinor: Number(c.amountMinor ?? 0),
         amount: c.amount || formatMinor(c.amountMinor),
         severity,
+        openedAtDate: c.openedAt ? new Date(c.openedAt) : null,
         age: c.age || calculateAge(c.openedAt),
         status,
         raw: c,
@@ -146,35 +165,39 @@ export default function ExceptionQueuePage() {
     });
   }, [pagedData]);
 
-  // Client-side filter matching search and pills
+  // Pre-filter pill buttons while letting AG Grid quickFilterText handle text search across all columns
   const filteredRows = useMemo(() => {
     return rowData.filter((r) => {
-      const q = searchTerm.toLowerCase();
-      const matchesSearch =
-        r.id.toLowerCase().includes(q) ||
-        r.order.toLowerCase().includes(q) ||
-        r.type.toLowerCase().includes(q);
       const matchesSeverity = selectedSeverity === 'All' || r.severity === selectedSeverity;
       const matchesStatus = selectedStatus === 'All' || r.status === selectedStatus;
-      return matchesSearch && matchesSeverity && matchesStatus;
+      return matchesSeverity && matchesStatus;
     });
-  }, [rowData, searchTerm, selectedSeverity, selectedStatus]);
+  }, [rowData, selectedSeverity, selectedStatus]);
 
-  // AG Grid column definitions matching PNG design
+  // AG Grid Community column definitions (text, number, date filters + pinned Case ID + tooltips)
   const columnDefs: ColDef<GridCaseRow>[] = useMemo(() => [
     {
       field: 'id',
       headerName: 'Case',
-      width: 130,
+      pinned: 'left',
+      lockPinned: true,
+      width: 125,
+      minWidth: 115,
+      filter: 'agTextColumnFilter',
+      tooltipValueGetter: (params) => `Case ${params.value ?? ''} — Press Enter to inspect`,
       cellRenderer: (params: ICellRendererParams<GridCaseRow>) => {
         if (!params.value) return null;
         return (
-          <Link
-            to={`/case/${params.value}`}
-            className="text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
-          >
-            {params.value}
-          </Link>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Link
+              to={`/case/${params.value}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer truncate"
+            >
+              {params.value}
+            </Link>
+            <CopyableIdCell value={String(params.value)} displayText="" />
+          </div>
         );
       },
     },
@@ -182,142 +205,109 @@ export default function ExceptionQueuePage() {
       field: 'type',
       headerName: 'Type',
       flex: 1.2,
-      minWidth: 170,
+      minWidth: 155,
+      filter: 'agTextColumnFilter',
+      tooltipField: 'type',
     },
     {
       field: 'order',
-      headerName: 'Order',
-      width: 170,
+      headerName: 'Order / Capture',
+      width: 165,
+      filter: 'agTextColumnFilter',
+      tooltipField: 'order',
       cellRenderer: (params: ICellRendererParams<GridCaseRow>) => {
-        const val = params.value || '#n/a';
-        if (val.startsWith('capture:')) {
-          const capId = val.replace('capture:', '');
-          return (
-            <div className="flex items-center gap-1.5 group font-mono text-xs text-slate-600 dark:text-slate-400">
-              <span title={val} className="truncate max-w-[105px]">{val}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigator.clipboard.writeText(capId);
-                  toast.info(`Copied: ${capId}`);
-                }}
-                title={`Copy full capture ID: ${capId}`}
-                className="opacity-0 group-hover:opacity-100 hover:text-blue-500 text-slate-400 transition-opacity p-0.5 cursor-pointer"
-              >
-                <GoogleIcon name="content_copy" size={13} />
-              </button>
-            </div>
-          );
-        }
-        return <span className="font-mono text-slate-600 dark:text-slate-400">{val}</span>;
+        const val = String(params.value || '#n/a');
+        const copyVal = val.startsWith('capture:') ? val.replace('capture:', '') : val;
+        return <CopyableIdCell value={val} copyValue={copyVal} />;
       },
     },
     {
-      field: 'amount',
+      field: 'amountMinor',
       headerName: 'Amount',
-      width: 160,
+      width: 115,
+      filter: 'agNumberColumnFilter',
       cellClass: 'font-mono font-medium',
+      valueFormatter: (params: ValueFormatterParams<GridCaseRow, number>) =>
+        formatMinor(params.value ?? undefined),
+      tooltipValueGetter: (params) =>
+        params.data ? `${formatMinor(params.data.amountMinor)} (${params.data.amountMinor} cents)` : '',
     },
     {
       field: 'severity',
       headerName: 'Severity',
-      width: 130,
-      cellRenderer: (params: ICellRendererParams<GridCaseRow>) => {
-        const val = params.value;
-        if (val === 'High') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-rose-300 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-              <span>High</span>
-            </span>
-          );
-        }
-        if (val === 'Medium') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-              <span>Medium</span>
-            </span>
-          );
-        }
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 text-xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-            <span>Low</span>
-          </span>
-        );
-      },
+      width: 125,
+      filter: 'agTextColumnFilter',
+      cellRenderer: (params: ICellRendererParams<GridCaseRow>) => (
+        <SeverityPillCell severity={params.value} />
+      ),
     },
     {
-      field: 'age',
-      headerName: 'Age',
-      width: 100,
-      cellClass: 'text-slate-500 dark:text-slate-400 font-normal',
+      field: 'openedAtDate',
+      headerName: 'Detected',
+      width: 145,
+      filter: 'agDateColumnFilter',
+      cellClass: 'text-slate-500 dark:text-slate-400 text-xs font-mono',
+      valueFormatter: (params: ValueFormatterParams<GridCaseRow, Date>) => {
+        if (!params.value) return '';
+        return `${params.data?.age || ''} (${params.value.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        })})`;
+      },
+      tooltipValueGetter: (params) => (params.value ? params.value.toISOString() : ''),
     },
     {
       field: 'status',
       headerName: 'Status',
-      width: 140,
-      cellRenderer: (params: ICellRendererParams<GridCaseRow>) => {
-        const val = params.value;
-        if (val === 'Open') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-normal">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-              <span>Open</span>
-            </span>
-          );
-        }
-        if (val === 'Investigating') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-blue-300 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-normal">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-              <span>Investigating</span>
-            </span>
-          );
-        }
-        if (val === 'Proposed') {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-purple-300 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 text-xs font-normal">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-              <span>Proposed</span>
-            </span>
-          );
-        }
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-normal">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span>Resolved</span>
-          </span>
-        );
-      },
+      width: 135,
+      filter: 'agTextColumnFilter',
+      cellRenderer: (params: ICellRendererParams<GridCaseRow>) => (
+        <StatusPillCell status={params.value} />
+      ),
     },
   ], []);
 
-  const defaultColDef = useMemo<ColDef>(() => ({
+  const defaultColDef = useMemo<ColDef<GridCaseRow>>(() => ({
     sortable: true,
     filter: true,
     resizable: true,
   }), []);
 
+  const onGridReady = useCallback((event: GridReadyEvent<GridCaseRow>) => {
+    setGridApi(event.api);
+    restoreGridColumnState(QUEUE_COL_STATE_KEY, event.api);
+  }, []);
+
+  const persistColumns = useCallback(() => {
+    if (gridApi) {
+      saveGridColumnState(QUEUE_COL_STATE_KEY, gridApi);
+    }
+  }, [gridApi]);
+
   const handleExportCSV = () => {
-    const rows = ['Case,Type,Order,Amount,Severity,Age,Status'].concat(
-      filteredRows.map(
-        (c) => `${c.id},"${c.type}",${c.order},"${c.amount}",${c.severity},${c.age},${c.status}`
-      )
-    );
-    const uri = encodeURI('data:text/csv;charset=utf-8,' + rows.join('\n'));
-    const a = document.createElement('a');
-    a.setAttribute('href', uri);
-    a.setAttribute('download', 'payresolve_exception_queue.csv');
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!gridApi) return;
+    gridApi.exportDataAsCsv({
+      fileName: 'payresolve_exception_queue.csv',
+      columnKeys: ['id', 'type', 'order', 'amountMinor', 'severity', 'openedAtDate', 'status'],
+      processCellCallback: (params) => {
+        if (params.column.getColId() === 'amountMinor') {
+          return formatMinor(Number(params.value));
+        }
+        if (params.column.getColId() === 'openedAtDate' && params.value instanceof Date) {
+          return params.value.toISOString();
+        }
+        return params.value != null ? String(params.value) : '';
+      },
+    });
+    toast.success('Exported Exception Queue via AG Grid Community CSV.');
   };
 
-  const { isDark } = useTheme();
-  const agThemeClass = isDark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz';
+  const handleCellKeyDown = (event: CellKeyDownEvent<GridCaseRow>) => {
+    const keyEvent = event.event as KeyboardEvent | undefined;
+    if (keyEvent?.key === 'Enter' && event.data?.id) {
+      navigate(`/case/${event.data.id}`);
+    }
+  };
 
   return (
     <AppLayout>
@@ -362,7 +352,7 @@ export default function ExceptionQueuePage() {
                 <span className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
                   <CountUp value={statsData?.openCount ?? filteredRows.filter(r => r.status === 'Open').length} />
                 </span>
-                <span className="text-emerald-500 font-medium text-xs">+2 today</span>
+                <span className="text-slate-500 dark:text-slate-400 font-normal text-xs">active</span>
               </div>
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
@@ -379,14 +369,14 @@ export default function ExceptionQueuePage() {
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-                <span>Duplicates blocked today</span>
+                <span>Duplicates blocked</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-                  <CountUp value={statsData?.duplicatesBlockedToday ?? 7} />
+                  <CountUp value={statsData?.duplicatesBlockedToday ?? 0} />
                 </span>
-                <span className="text-xs text-emerald-500">Auto-resolved</span>
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">Idempotent</span>
               </div>
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
@@ -397,7 +387,7 @@ export default function ExceptionQueuePage() {
               <div className="flex items-baseline justify-between">
                 <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
                   <CountUp
-                    value={statsData?.oldestOpenMinutes != null && statsData.oldestOpenMinutes > 0 ? statsData.oldestOpenMinutes : 38}
+                    value={statsData?.oldestOpenMinutes ?? 0}
                     suffix=" min"
                   />
                 </div>
@@ -464,101 +454,80 @@ export default function ExceptionQueuePage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-[#131b26] cursor-pointer shadow-2xs self-start sm:self-auto shrink-0 transition-colors"
-              >
-                <GoogleIcon name="download" size={14} className="text-slate-500 dark:text-slate-400" />
-                <span>Export CSV</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gridApi) {
+                      resetGridColumnState(QUEUE_COL_STATE_KEY, gridApi);
+                      toast.info('Reset column order & widths.');
+                    }
+                  }}
+                  aria-label="Reset queue table columns"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-[#131b26] cursor-pointer transition-colors"
+                >
+                  <GoogleIcon name="restart_alt" size={14} />
+                  <span>Reset layout</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  disabled={!gridApi || filteredRows.length === 0}
+                  aria-label="Export exception queue as CSV"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 bg-white dark:bg-[#131b26] cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                >
+                  <GoogleIcon name="download" size={14} className="text-slate-500 dark:text-slate-400" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
 
-          {/* AG Grid or States */}
-          {casesLoading ? (
-            <TableSkeleton rows={6} columns={7} />
-          ) : casesError ? (
+          {/* AG Grid Community (Theming API + Quick Filter + Column Pinning + Pagination + CSV Export) */}
+          {casesError ? (
             <ErrorState
               title="Failed to load exception queue"
               message="Could not retrieve detected exception cases from the backend."
               onRetry={() => refetchCases()}
             />
-          ) : filteredRows.length === 0 ? (
+          ) : !casesLoading && filteredRows.length === 0 ? (
             <EmptyState
               title="No exception cases match the filter"
               description="Adjust your search criteria or run detectors to discover newly pending exceptions."
               action={{ label: 'Reset filters', onClick: () => { setSearchTerm(''); setSelectedSeverity('All'); setSelectedStatus('All'); } }}
             />
           ) : (
-            <div className="w-full">
-                <div
-                  key={isDark ? 'grid-dark' : 'grid-light'}
-                  className={`${agThemeClass} w-full h-[360px] sm:h-[420px] rounded-xl overflow-hidden border border-slate-150 dark:border-slate-800/80 shadow-xs`}
-                  style={{
-                    fontFamily: 'inherit',
-                    '--ag-font-size': '12.5px',
-                    '--ag-grid-size': '6px',
-                    '--ag-row-height': '46px',
-                    '--ag-header-height': '42px',
-                    '--ag-border-color': isDark ? '#1a2233' : '#f1f5f9',
-                    '--ag-background-color': isDark ? '#0b101b' : '#ffffff',
-                    '--ag-data-background-color': isDark ? '#0b101b' : '#ffffff',
-                    '--ag-wrapper-background-color': isDark ? '#0b101b' : '#ffffff',
-                    '--ag-header-background-color': isDark ? '#0e1524' : '#fafafa',
-                    '--ag-foreground-color': isDark ? '#f1f5f9' : '#0f172a',
-                    '--ag-header-foreground-color': isDark ? '#94a3b8' : '#64748b',
-                    '--ag-row-hover-color': isDark ? '#141d2f' : '#f8fafc',
-                  } as React.CSSProperties}
-                >
-                <AgGridReact<GridCaseRow>
-                  rowData={filteredRows}
-                  columnDefs={columnDefs}
-                  defaultColDef={defaultColDef}
-                  animateRows={true}
-                  rowSelection="single"
-                  onRowClicked={(event) => {
-                    if (event.data?.id) {
-                      navigate(`/case/${event.data.id}`);
-                    }
-                  }}
-                />
-              </div>
-
-              {/* Pagination & Status Footer */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-3 px-1 border-t border-slate-100 dark:border-slate-800/60 gap-2 sm:gap-0">
-                <div>
-                  Showing <span className="font-semibold text-slate-900 dark:text-white">{filteredRows.length > 0 ? 1 : 0}</span> to{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">{Math.min(filteredRows.length, 7)}</span> of{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">{pagedData?.totalElements ?? filteredRows.length}</span> cases
-                </div>
-                <div className="flex items-center gap-1 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    disabled
-                    className="px-2.5 py-1 rounded border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 text-xs disabled:opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900/40"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    className="w-7 h-7 rounded bg-blue-600 text-white text-xs font-semibold flex items-center justify-center cursor-pointer shadow-xs"
-                  >
-                    1
-                  </button>
-                  <button
-                    type="button"
-                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    2
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2.5 py-1 rounded border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+            <div
+              role="region"
+              aria-label="Exception Queue Data Table"
+              className="w-full h-[460px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs"
+            >
+              <AgGridReact<GridCaseRow>
+                ref={gridRef}
+                theme={gridTheme}
+                rowData={filteredRows}
+                columnDefs={columnDefs}
+                defaultColDef={defaultColDef}
+                loading={casesLoading}
+                quickFilterText={searchTerm}
+                animateRows={true}
+                pagination={true}
+                paginationPageSize={10}
+                paginationPageSizeSelector={[10, 20, 50]}
+                rowSelection={{ mode: 'singleRow', enableClickSelection: true, checkboxes: false }}
+                tooltipShowDelay={300}
+                overlayNoRowsTemplate='<span class="text-xs text-slate-500">No exception cases found.</span>'
+                onGridReady={onGridReady}
+                onColumnMoved={persistColumns}
+                onColumnResized={persistColumns}
+                onColumnPinned={persistColumns}
+                onSortChanged={persistColumns}
+                onCellKeyDown={handleCellKeyDown}
+                onRowClicked={(event) => {
+                  if (event.data?.id) {
+                    navigate(`/case/${event.data.id}`);
+                  }
+                }}
+              />
             </div>
           )}
         </div>

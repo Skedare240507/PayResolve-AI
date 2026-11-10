@@ -1,18 +1,28 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule, type ColDef, type ICellRendererParams } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
+import type {
+  ColDef,
+  GridApi,
+  GridReadyEvent,
+  ICellRendererParams,
+  ValueFormatterParams,
+} from 'ag-grid-community';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { CopyableIdCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, fetchApi, type WebhookEventRecord } from '../lib/api';
 import { toast } from '../lib/toast';
-import { TableSkeleton, ErrorState } from '../components/DataStates';
-import { useTheme } from '../lib/theme';
+import { ErrorState, EmptyState } from '../components/DataStates';
+import {
+  useGridTheme,
+  saveGridColumnState,
+  restoreGridColumnState,
+  resetGridColumnState,
+} from '../lib/gridTheme';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+const EVENTS_COL_STATE_KEY = 'payresolve_grid_events_cols_v1';
 
 export interface DisplayEvent {
   id: number;
@@ -22,99 +32,19 @@ export interface DisplayEvent {
   signature: 'Verified' | 'Unverified';
   status: 'Processed' | 'Failed' | 'Duplicate' | 'Received';
   tries: number;
+  receivedAtDate: Date | null;
   at: string;
   rawPayload: string;
   attempts: { label: string; statusText: string; isError?: boolean }[];
   raw: WebhookEventRecord;
 }
 
-const FALLBACK_EVENTS: DisplayEvent[] = [
-  {
-    id: 1,
-    eventId: 'evt-8841',
-    type: 'PAYMENT.CAPTURE.COMPLETED',
-    resource: 'capture 8XK',
-    signature: 'Verified',
-    status: 'Failed',
-    tries: 2,
-    at: '10:02:41',
-    rawPayload:
-      '{"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"8XK","status":"COMPLETED","amount":{"value":"84.50","currency_code":"USD"},"custom_id":"10482"}}',
-    attempts: [
-      { label: 'Attempt 1', statusText: 'failed handler error', isError: true },
-      { label: 'Attempt 2', statusText: 'duplicate, no effect', isError: false },
-    ],
-    raw: {} as WebhookEventRecord,
-  },
-  {
-    id: 2,
-    eventId: 'evt-8841',
-    type: 'PAYMENT.CAPTURE.COMPLETED',
-    resource: 'capture 8XK',
-    signature: 'Verified',
-    status: 'Duplicate',
-    tries: 1,
-    at: '10:02:56',
-    rawPayload:
-      '{"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"8XK","status":"COMPLETED","amount":{"value":"84.50","currency_code":"USD"},"custom_id":"10482"}}',
-    attempts: [
-      { label: 'Attempt 1', statusText: 'duplicate, no effect', isError: false },
-    ],
-    raw: {} as WebhookEventRecord,
-  },
-  {
-    id: 3,
-    eventId: 'evt-8837',
-    type: 'PAYMENT.CAPTURE.COMPLETED',
-    resource: 'capture 4TM',
-    signature: 'Verified',
-    status: 'Processed',
-    tries: 1,
-    at: '09:58:03',
-    rawPayload:
-      '{"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"4TM","status":"COMPLETED","amount":{"value":"32.00","currency_code":"USD"},"custom_id":"10477"}}',
-    attempts: [
-      { label: 'Attempt 1', statusText: 'handler succeeded', isError: false },
-    ],
-    raw: {} as WebhookEventRecord,
-  },
-  {
-    id: 4,
-    eventId: 'evt-8830',
-    type: 'PAYMENT.CAPTURE.REFUNDED',
-    resource: 'refund 2QD',
-    signature: 'Verified',
-    status: 'Processed',
-    tries: 1,
-    at: '09:41:20',
-    rawPayload:
-      '{"event_type":"PAYMENT.CAPTURE.REFUNDED","resource":{"id":"2QD","status":"COMPLETED","amount":{"value":"18.00","currency_code":"USD"},"custom_id":"10470"}}',
-    attempts: [
-      { label: 'Attempt 1', statusText: 'handler succeeded', isError: false },
-    ],
-    raw: {} as WebhookEventRecord,
-  },
-  {
-    id: 5,
-    eventId: 'evt-8826',
-    type: 'CHECKOUT.ORDER.APPROVED',
-    resource: 'order 6HJ',
-    signature: 'Verified',
-    status: 'Received',
-    tries: 0,
-    at: '09:40:02',
-    rawPayload:
-      '{"event_type":"CHECKOUT.ORDER.APPROVED","resource":{"id":"6HJ","status":"APPROVED","amount":{"value":"120.00","currency_code":"USD"},"custom_id":"10466"}}',
-    attempts: [
-      { label: 'Attempt 1', statusText: 'enqueued for processing', isError: false },
-    ],
-    raw: {} as WebhookEventRecord,
-  },
-];
-
 export default function EventInboxPage() {
   const queryClient = useQueryClient();
-  const { isDark } = useTheme();
+  const { gridTheme } = useGridTheme();
+  const gridRef = useRef<AgGridReact<DisplayEvent>>(null);
+  const [gridApi, setGridApi] = useState<GridApi<DisplayEvent> | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Fetch Events
   const {
@@ -124,7 +54,7 @@ export default function EventInboxPage() {
     refetch: refetchEvents,
   } = useQuery({
     queryKey: ['events'],
-    queryFn: () => api.events.list({ limit: 50 }),
+    queryFn: () => api.events.list({ limit: 100 }),
   });
 
   // 2. Fetch Stats
@@ -133,13 +63,9 @@ export default function EventInboxPage() {
     queryFn: api.events.stats,
   });
 
-  // Map backend webhook_events to DisplayEvent
+  // Map backend webhook_events to DisplayEvent (real rows only, no mock fallback)
   const displayEvents: DisplayEvent[] = useMemo(() => {
     const rawList = pagedData?.content || [];
-    if (rawList.length === 0 && !eventsLoading) {
-      return FALLBACK_EVENTS;
-    }
-
     return rawList.map((e) => {
       const status: DisplayEvent['status'] =
         e.status === 'PROCESSED' || e.status === 'Processed'
@@ -159,6 +85,8 @@ export default function EventInboxPage() {
         isError: !!att.isError,
       }));
 
+      const recDate = e.receivedAt ? new Date(e.receivedAt) : null;
+
       return {
         id: e.id || 0,
         eventId: e.eventId || e.paypalEventId || 'evt-unknown',
@@ -166,31 +94,36 @@ export default function EventInboxPage() {
         resource: e.resource || 'resource',
         signature: sig,
         status,
-        tries: e.tries || 1,
-        at: e.at || (e.receivedAt ? new Date(e.receivedAt).toLocaleTimeString([], { hour12: false }) : '10:00:00'),
+        tries: Number(e.tries ?? 1),
+        receivedAtDate: recDate,
+        at: e.at || (recDate ? recDate.toLocaleTimeString([], { hour12: false }) : '—'),
         rawPayload: e.rawPayload || '{}',
-        attempts: attemptsList.length > 0 ? attemptsList : [
-          {
-            label: `Attempt ${e.tries || 1}`,
-            statusText: e.lastError || (status === 'Processed' ? 'handler succeeded' : 'enqueued'),
-            isError: status === 'Failed',
-          },
-        ],
+        attempts:
+          attemptsList.length > 0
+            ? attemptsList
+            : [
+                {
+                  label: `Attempt ${e.tries || 1}`,
+                  statusText: e.lastError || (status === 'Processed' ? 'handler succeeded' : 'enqueued'),
+                  isError: status === 'Failed',
+                },
+              ],
         raw: e,
       };
     });
-  }, [pagedData, eventsLoading]);
+  }, [pagedData]);
 
-  const [selectedEventId, setSelectedEventId] = useState<string>('evt-8841');
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
 
   const selectedEvent = useMemo(() => {
-    const found = displayEvents.find((e) => e.eventId === selectedEventId);
-    return found || displayEvents[0] || FALLBACK_EVENTS[0];
+    if (displayEvents.length === 0) return null;
+    return displayEvents.find((e) => e.eventId === selectedEventId) || displayEvents[0];
   }, [displayEvents, selectedEventId]);
 
   // Replay Mutation
   const replayMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedEvent) throw new Error('Select an event before replaying.');
       return fetchApi('/api/webhooks/paypal', {
         method: 'POST',
         headers: {
@@ -207,121 +140,120 @@ export default function EventInboxPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['events-stats'] });
-      toast.success(`Replaying ${selectedEvent.eventId}: dispatched to idempotency-aware webhook receiver.`);
+      toast.success(
+        `Replaying ${selectedEvent?.eventId || 'event'}: dispatched to idempotency-aware webhook receiver.`
+      );
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : 'Replay failed.');
     },
   });
 
-  // AG Grid Column Definitions
-  const columnDefs = useMemo<ColDef<DisplayEvent>[]>(() => [
-    {
-      field: 'eventId',
-      headerName: 'Event',
-      width: 125,
-      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
-        const val = params.value;
-        return (
-          <div className="flex items-center space-x-1.5 font-mono font-semibold text-slate-900 dark:text-white">
-            <span>{val}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(val);
-                toast.info(`Copied event ID: ${val}`);
-              }}
-              title={`Copy ${val}`}
-              className="text-slate-400 hover:text-blue-500 cursor-pointer p-0.5"
-            >
-              <GoogleIcon name="content_copy" size={13} />
-            </button>
-          </div>
-        );
+  // AG Grid Community Column Definitions (pinned ID left, text/number/date filters, icon+text pills, copy button)
+  const columnDefs = useMemo<ColDef<DisplayEvent>[]>(
+    () => [
+      {
+        field: 'eventId',
+        headerName: 'Event ID',
+        pinned: 'left',
+        lockPinned: true,
+        width: 155,
+        minWidth: 130,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'eventId',
+        cellRenderer: (params: ICellRendererParams<DisplayEvent>) => (
+          <CopyableIdCell value={params.value} />
+        ),
       },
-    },
-    {
-      field: 'type',
-      headerName: 'Type',
-      minWidth: 230,
-      flex: 1,
-      cellClass: 'font-mono text-xs text-slate-700 dark:text-slate-300',
-    },
-    {
-      field: 'resource',
-      headerName: 'Resource',
-      width: 130,
-      cellClass: 'text-slate-600 dark:text-slate-400 font-normal',
-    },
-    {
-      field: 'signature',
-      headerName: 'Signature',
-      width: 115,
-      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
-        const val = params.value;
-        return (
-          <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-            {val}
-          </span>
-        );
+      {
+        field: 'type',
+        headerName: 'Type',
+        minWidth: 220,
+        flex: 1.2,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'type',
+        cellClass: 'font-mono text-xs',
       },
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 125,
-      cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
-        const status = params.value;
-        if (status === 'Failed') {
-          return (
-            <span className="px-2.5 py-0.5 rounded-full border border-rose-400 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-xs font-medium">
-              Failed
-            </span>
-          );
-        }
-        if (status === 'Duplicate') {
-          return (
-            <span className="px-2.5 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-medium">
-              Duplicate
-            </span>
-          );
-        }
-        if (status === 'Processed') {
-          return (
-            <span className="px-2.5 py-0.5 rounded-full border border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-              Processed
-            </span>
-          );
-        }
-        return (
-          <span className="px-2.5 py-0.5 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-medium">
-            Received
-          </span>
-        );
+      {
+        field: 'resource',
+        headerName: 'Resource',
+        width: 145,
+        filter: 'agTextColumnFilter',
+        tooltipField: 'resource',
       },
-    },
-    {
-      field: 'tries',
-      headerName: 'Tries',
-      width: 85,
-      cellClass: 'font-mono text-xs text-slate-600 dark:text-slate-400 text-center',
-    },
-    {
-      field: 'at',
-      headerName: 'At',
-      width: 110,
-      cellClass: 'font-mono text-slate-500 dark:text-slate-400 text-xs',
-    },
-  ], []);
+      {
+        field: 'signature',
+        headerName: 'Signature',
+        width: 130,
+        filter: 'agTextColumnFilter',
+        cellRenderer: (params: ICellRendererParams<DisplayEvent>) => (
+          <StatusPillCell status={params.value} />
+        ),
+      },
+      {
+        field: 'status',
+        headerName: 'Status',
+        width: 135,
+        filter: 'agTextColumnFilter',
+        cellRenderer: (params: ICellRendererParams<DisplayEvent>) => (
+          <StatusPillCell status={params.value} />
+        ),
+      },
+      {
+        field: 'tries',
+        headerName: 'Tries',
+        width: 95,
+        filter: 'agNumberColumnFilter',
+        cellClass: 'font-mono text-xs text-center',
+      },
+      {
+        field: 'receivedAtDate',
+        headerName: 'Received At',
+        width: 150,
+        filter: 'agDateColumnFilter',
+        cellClass: 'font-mono text-xs',
+        valueFormatter: (params: ValueFormatterParams<DisplayEvent, Date>) =>
+          params.data?.at || (params.value ? params.value.toLocaleTimeString([], { hour12: false }) : ''),
+        tooltipValueGetter: (params) => (params.value ? params.value.toISOString() : ''),
+      },
+    ],
+    []
+  );
 
-  const defaultColDef = useMemo<ColDef>(() => ({
-    sortable: true,
-    filter: true,
-    resizable: true,
-  }), []);
+  const defaultColDef = useMemo<ColDef<DisplayEvent>>(
+    () => ({
+      sortable: true,
+      filter: true,
+      resizable: true,
+    }),
+    []
+  );
 
-  const agThemeClass = isDark ? 'ag-theme-quartz-dark' : 'ag-theme-quartz';
+  const onGridReady = useCallback((event: GridReadyEvent<DisplayEvent>) => {
+    setGridApi(event.api);
+    restoreGridColumnState(EVENTS_COL_STATE_KEY, event.api);
+  }, []);
+
+  const persistColumns = useCallback(() => {
+    if (gridApi) {
+      saveGridColumnState(EVENTS_COL_STATE_KEY, gridApi);
+    }
+  }, [gridApi]);
+
+  const handleExportCsv = () => {
+    if (!gridApi) return;
+    gridApi.exportDataAsCsv({
+      fileName: 'payresolve_webhook_events.csv',
+      columnKeys: ['eventId', 'type', 'resource', 'signature', 'status', 'tries', 'receivedAtDate'],
+      processCellCallback: (params) => {
+        if (params.column.getColId() === 'receivedAtDate' && params.value instanceof Date) {
+          return params.value.toISOString();
+        }
+        return params.value != null ? String(params.value) : '';
+      },
+    });
+    toast.success('Exported Event Inbox CSV via AG Grid Community.');
+  };
 
   return (
     <AppLayout>
@@ -350,7 +282,7 @@ export default function EventInboxPage() {
             </button>
             <button
               onClick={() => replayMutation.mutate()}
-              disabled={replayMutation.isPending}
+              disabled={replayMutation.isPending || !selectedEvent}
               className="px-4 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs transition-colors disabled:opacity-60"
             >
               {replayMutation.isPending ? 'Replaying...' : 'Replay event'}
@@ -358,30 +290,30 @@ export default function EventInboxPage() {
           </div>
         </div>
 
-        {/* 4 Stat Cards */}
+        {/* 4 Stat Cards (real aggregates only) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Received</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {statsData?.received ?? 214}
+              {statsData?.received ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Verified</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {statsData?.verified ?? 214}
+              {statsData?.verified ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Processed</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {statsData?.processed ?? 207}
+              {statsData?.processed ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
             <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Failed or duplicate</div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-              {statsData?.failedOrDuplicate ?? 7}
+              {statsData?.failedOrDuplicate ?? 0}
             </div>
           </div>
         </div>
@@ -391,49 +323,91 @@ export default function EventInboxPage() {
           
           {/* Left: AG Grid Table */}
           <div className="lg:col-span-8 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 overflow-hidden space-y-3">
-            <div className="flex items-center justify-between pb-1">
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Incoming Webhook Stream
-              </span>
-              <span className="text-[11px] text-slate-400 font-mono">
-                Click any row to inspect raw payload &amp; attempt logs
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+              <div className="relative flex-1 max-w-xs">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <GoogleIcon name="search" size={15} />
+                </span>
+                <input
+                  type="text"
+                  aria-label="Quick filter webhook events"
+                  placeholder="Quick filter event ID, type, resource..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white bg-white dark:bg-[#131b26]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (gridApi) {
+                      resetGridColumnState(EVENTS_COL_STATE_KEY, gridApi);
+                      toast.info('Reset event grid columns.');
+                    }
+                  }}
+                  aria-label="Reset event inbox columns"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <GoogleIcon name="restart_alt" size={14} />
+                  <span>Reset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={!gridApi || displayEvents.length === 0}
+                  aria-label="Export webhook events as CSV"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+                >
+                  <GoogleIcon name="download" size={14} />
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
 
-            {eventsLoading ? (
-              <TableSkeleton rows={5} columns={6} />
-            ) : eventsError ? (
+            {eventsError ? (
               <ErrorState
                 title="Failed to load events"
                 message="Could not retrieve webhook events from the server."
                 onRetry={() => refetchEvents()}
               />
+            ) : !eventsLoading && displayEvents.length === 0 ? (
+              <EmptyState
+                title="No webhook events recorded yet"
+                description="Send a checkout in Demo Shop or trigger webhook verification to stream incoming PayPal events here."
+              />
             ) : (
               <div
-                key={isDark ? 'events-grid-dark' : 'events-grid-light'}
-                className={`${agThemeClass} w-full h-[400px] rounded-xl overflow-hidden border border-slate-150 dark:border-slate-800/80 shadow-xs`}
-                style={{
-                  fontFamily: 'inherit',
-                  '--ag-font-size': '12.5px',
-                  '--ag-grid-size': '6px',
-                  '--ag-row-height': '46px',
-                  '--ag-header-height': '42px',
-                  '--ag-border-color': isDark ? '#1a2233' : '#f1f5f9',
-                  '--ag-background-color': isDark ? '#0b101b' : '#ffffff',
-                  '--ag-data-background-color': isDark ? '#0b101b' : '#ffffff',
-                  '--ag-wrapper-background-color': isDark ? '#0b101b' : '#ffffff',
-                  '--ag-header-background-color': isDark ? '#0e1524' : '#fafafa',
-                  '--ag-foreground-color': isDark ? '#f1f5f9' : '#0f172a',
-                  '--ag-header-foreground-color': isDark ? '#94a3b8' : '#64748b',
-                  '--ag-row-hover-color': isDark ? '#141d2f' : '#f8fafc',
-                } as React.CSSProperties}
+                role="region"
+                aria-label="Webhook Event Inbox Table"
+                className="w-full h-[460px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs"
               >
                 <AgGridReact<DisplayEvent>
+                  ref={gridRef}
+                  theme={gridTheme}
                   rowData={displayEvents}
                   columnDefs={columnDefs}
                   defaultColDef={defaultColDef}
+                  loading={eventsLoading}
+                  quickFilterText={searchTerm}
                   animateRows={true}
-                  rowSelection="single"
+                  pagination={true}
+                  paginationPageSize={10}
+                  paginationPageSizeSelector={[10, 20, 50]}
+                  rowSelection={{ mode: 'singleRow', enableClickSelection: true, checkboxes: false }}
+                  tooltipShowDelay={300}
+                  overlayNoRowsTemplate='<span class="text-xs text-slate-500">No webhook events matched.</span>'
+                  onGridReady={onGridReady}
+                  onColumnMoved={persistColumns}
+                  onColumnResized={persistColumns}
+                  onColumnPinned={persistColumns}
+                  onSortChanged={persistColumns}
+                  onRowSelected={(event) => {
+                    if (event.node.isSelected() && event.data?.eventId) {
+                      setSelectedEventId(event.data.eventId);
+                    }
+                  }}
                   onRowClicked={(event) => {
                     if (event.data?.eventId) {
                       setSelectedEventId(event.data.eventId);
@@ -446,66 +420,77 @@ export default function EventInboxPage() {
 
           {/* Right Detail Card */}
           <div className="lg:col-span-4 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs p-4 sm:p-6 space-y-5">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                {selectedEvent.eventId}: {selectedEvent.type}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                Received {selectedEvent.at} &middot; signature verified
-              </p>
-            </div>
+            {selectedEvent ? (
+              <>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white truncate" title={selectedEvent.type}>
+                    {selectedEvent.eventId}: {selectedEvent.type}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                    Received {selectedEvent.at} &middot; {selectedEvent.signature}
+                  </p>
+                </div>
 
-            {/* Attempts / Processing Log */}
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                Processing log
-              </span>
-              <div className="space-y-1.5 text-xs font-mono">
-                {selectedEvent.attempts.map((att, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-slate-600 dark:text-slate-400">
-                    <span>{att.label}:</span>
-                    <span className={att.isError ? 'text-rose-500 dark:text-rose-400 font-semibold' : ''}>
-                      {att.statusText}
-                    </span>
+                {/* Attempts / Processing Log */}
+                <div className="space-y-2">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                    Processing log
+                  </span>
+                  <div className="space-y-1.5 text-xs font-mono">
+                    {selectedEvent.attempts.map((att, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                        <span>{att.label}:</span>
+                        <span className={att.isError ? 'text-rose-500 dark:text-rose-400 font-semibold' : ''}>
+                          {att.statusText}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {/* Raw JSON Box with Pretty-Print & Copy */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Raw JSON payload
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    let formatted = selectedEvent.rawPayload;
-                    try {
-                      formatted = JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
-                    } catch {}
-                    navigator.clipboard.writeText(formatted);
-                    toast.info('Raw JSON payload copied to clipboard');
-                  }}
-                  className="flex items-center space-x-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                >
-                  <GoogleIcon name="content_copy" size={12} />
-                  <span>Copy JSON</span>
-                </button>
+                {/* Raw JSON Box with Pretty-Print & Copy */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Raw JSON payload
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let formatted = selectedEvent.rawPayload;
+                        try {
+                          formatted = JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
+                        } catch {}
+                        navigator.clipboard.writeText(formatted);
+                        toast.info('Raw JSON payload copied to clipboard');
+                      }}
+                      className="flex items-center space-x-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      <GoogleIcon name="content_copy" size={12} />
+                      <span>Copy JSON</span>
+                    </button>
+                  </div>
+                  <div className="p-3 bg-slate-950 text-slate-300 font-mono text-xs rounded-xl overflow-x-auto max-h-64 border border-slate-800">
+                    <pre className="whitespace-pre">
+                      {(() => {
+                        try {
+                          return JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
+                        } catch {
+                          return selectedEvent.rawPayload;
+                        }
+                      })()}
+                    </pre>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="py-12 text-center space-y-2">
+                <GoogleIcon name="webhook" size={28} className="text-slate-400 mx-auto" />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Select a webhook event row to inspect its raw JSON payload and delivery attempts.
+                </p>
               </div>
-              <div className="p-3 bg-slate-950 text-slate-300 font-mono text-xs rounded-xl overflow-x-auto max-h-64 border border-slate-800">
-                <pre className="whitespace-pre">
-                  {(() => {
-                    try {
-                      return JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
-                    } catch {
-                      return selectedEvent.rawPayload;
-                    }
-                  })()}
-                </pre>
-              </div>
-            </div>
+            )}
           </div>
 
         </div>
