@@ -1,0 +1,38 @@
+name: Validate Render Blueprint
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/render.yaml'
+      - '.github/workflows/render-blueprint-validate.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'infra/render.yaml'
+      - '.github/workflows/render-blueprint-validate.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-blueprint:
+    name: Validate infra/render.yaml Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate Render Blueprint against official schema
+        run: |
+          curl -fsSL https://render.com/schema/render.yaml.json -o /tmp/render-schema.json
+          npx --yes js-yaml infra/render.yaml > /tmp/render-blueprint.json
+          npx --yes -p ajv-cli -p ajv-formats ajv validate \
+            -s /tmp/render-schema.json \
+            -d /tmp/render-blueprint.json \
+            --spec=draft2020 \
+            --strict=false \
+            -c ajv-formats
