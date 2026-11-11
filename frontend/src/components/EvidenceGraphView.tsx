@@ -10,6 +10,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { EvidenceNode } from './EvidenceNode';
 import type { EvidenceNodeData } from './EvidenceNode';
+import { InfoTip } from './InfoTip';
 import type { EvidenceGraphDto, EvidenceNodeDto } from '../lib/api';
 import { useTheme } from '../lib/theme';
 
@@ -248,7 +249,7 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({ graph, cla
       </ReactFlow>
 
       {/* Graph Legend Overlay */}
-      <div className="absolute bottom-2.5 left-3 flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/90 dark:bg-[#0e1522]/90 backdrop-blur-xs border border-slate-200/70 dark:border-slate-800/70 text-[11px] text-slate-600 dark:text-slate-400 pointer-events-none select-none z-10 shadow-2xs">
+      <div className="absolute bottom-2.5 left-3 flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/90 dark:bg-[#0e1522]/90 backdrop-blur-xs border border-slate-200/70 dark:border-slate-800/70 text-[11px] text-slate-600 dark:text-slate-400 select-none z-10 shadow-2xs pointer-events-auto">
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
           <span>Confirmed</span>
@@ -261,6 +262,7 @@ export const EvidenceGraphView: React.FC<EvidenceGraphViewProps> = ({ graph, cla
           <span className="w-2.5 h-2.5 rounded-sm border border-dashed border-amber-500 bg-amber-500/20 inline-block" />
           <span>Missing Node</span>
         </div>
+        <InfoTip metricId="case.graphLegend" size={13} />
       </div>
     </div>
   );

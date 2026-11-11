@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { EvidenceGraphView } from '../components/EvidenceGraphView';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
 import { BarChartCard } from '../components/charts/BarChartCard';
 import { DonutChartCard } from '../components/charts/DonutChartCard';
 import { SEMANTIC_COLORS } from '../lib/chartTheme';
@@ -271,29 +272,35 @@ export default function CaseDetailsPage() {
   // Severity pill classes
   const severityBadge =
     caseData.severity === 'HIGH' ? (
-      <span className="text-rose-600 dark:text-rose-400 font-semibold">severity high</span>
+      <span className="text-rose-600 dark:text-rose-400 font-semibold inline-flex items-center gap-1">
+        severity high <InfoTip metricId="case.severity" size={14} />
+      </span>
     ) : caseData.severity === 'MEDIUM' ? (
-      <span className="text-amber-600 dark:text-amber-400 font-semibold">severity medium</span>
+      <span className="text-amber-600 dark:text-amber-400 font-semibold inline-flex items-center gap-1">
+        severity medium <InfoTip metricId="case.severity" size={14} />
+      </span>
     ) : (
-      <span className="text-slate-500 font-normal">severity low</span>
+      <span className="text-slate-500 font-normal inline-flex items-center gap-1">
+        severity low <InfoTip metricId="case.severity" size={14} />
+      </span>
     );
 
   const statusBadge =
     caseData.status === 'OPEN' ? (
-      <span className="px-3.5 py-1 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-normal">
-        Open
+      <span className="px-3.5 py-1 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-normal inline-flex items-center gap-1">
+        Open <InfoTip metricId="case.status" size={14} />
       </span>
     ) : caseData.status === 'INVESTIGATING' ? (
-      <span className="px-3.5 py-1 rounded-full border border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-xs font-normal">
-        Investigating
+      <span className="px-3.5 py-1 rounded-full border border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-xs font-normal inline-flex items-center gap-1">
+        Investigating <InfoTip metricId="case.status" size={14} />
       </span>
     ) : caseData.status === 'ACTION_PROPOSED' ? (
-      <span className="px-3.5 py-1 rounded-full border border-purple-400 dark:border-purple-700 text-purple-600 dark:text-purple-400 text-xs font-normal">
-        Proposed
+      <span className="px-3.5 py-1 rounded-full border border-purple-400 dark:border-purple-700 text-purple-600 dark:text-purple-400 text-xs font-normal inline-flex items-center gap-1">
+        Proposed <InfoTip metricId="case.status" size={14} />
       </span>
     ) : (
-      <span className="px-3.5 py-1 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-normal">
-        Resolved
+      <span className="px-3.5 py-1 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-normal inline-flex items-center gap-1">
+        Resolved <InfoTip metricId="case.status" size={14} />
       </span>
     );
 
@@ -439,13 +446,17 @@ export default function CaseDetailsPage() {
           {/* Right: AI Investigator */}
           <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
-              <span className="px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
+                <InfoTip metricId="case.investigationStatus" />
+              </div>
+              <span className="px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal inline-flex items-center gap-1">
                 {report?.status === 'DEGRADED'
                 ? 'Degraded rule fallback'
                 : report
                 ? 'Citations verified'
                 : 'Awaiting AI run'}
+                <InfoTip metricId="case.citationsVerified" size={13} />
               </span>
             </div>
 
@@ -462,6 +473,7 @@ export default function CaseDetailsPage() {
                       fallback
                     </span>
                   )}
+                  <InfoTip metricId="case.providerChip" size={13} />
                 </div>
                 <div className="font-mono text-slate-500 dark:text-slate-400">
                   {llmCalls[0].latencyMs} ms &middot; {llmCalls[0].promptTokens ?? 0} in / {llmCalls[0].completionTokens ?? 0} out
@@ -474,9 +486,14 @@ export default function CaseDetailsPage() {
                 {toolCalls.map((tc, idx) => (
                   <span
                     key={idx}
-                    className="px-2.5 py-1 rounded-full border border-blue-400/60 dark:border-blue-700/60 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                    className="px-2.5 py-1 rounded-full border border-blue-400/60 dark:border-blue-700/60 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1"
                   >
                     {tc.toolName} {tc.latencyMs} ms
+                    <InfoTip
+                      metricId="case.toolLatency"
+                      values={{ customDetail: `${tc.toolName}: ${tc.latencyMs} ms execution latency` }}
+                      size={12}
+                    />
                   </span>
                 ))}
               </div>
@@ -487,6 +504,7 @@ export default function CaseDetailsPage() {
               <DonutChartCard
                 title="Case Evidence Coverage"
                 description="Confirmed, conflicting, and missing evidence items in this case DAG."
+                metricId="case.evidenceCoverage"
                 data={evidenceCoverageDonutData}
                 angleKey="count"
                 calloutLabelKey="category"
@@ -499,6 +517,7 @@ export default function CaseDetailsPage() {
               <BarChartCard
                 title="Investigation Tool-Call Latencies"
                 description="Measured read-only tool latencies from persisted investigation_steps."
+                metricId="case.toolLatency"
                 data={toolCalls}
                 xKey="stepLabel"
                 xLabel="Tool Step"
