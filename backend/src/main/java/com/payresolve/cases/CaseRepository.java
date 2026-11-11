@@ -69,6 +69,34 @@ public class CaseRepository {
             .optional();
     }
 
+    public List<CaseRecord> findByShopOrderOrPaypalOrder(String shopOrderId, String paypalOrderId) {
+        List<String> clauses = new ArrayList<>();
+        if (shopOrderId != null && !shopOrderId.isBlank()) {
+            clauses.add("shop_order_id = :shopOrderId");
+        }
+        if (paypalOrderId != null && !paypalOrderId.isBlank()) {
+            clauses.add("paypal_order_id = :paypalOrderId");
+        }
+        if (clauses.isEmpty()) {
+            return List.of();
+        }
+        String sql = """
+            SELECT id, type, status, severity, paypal_order_id, shop_order_id,
+                   amount_minor, currency, opened_at, updated_at, resolved_at, summary
+            FROM cases
+            WHERE %s
+            ORDER BY opened_at DESC
+            """.formatted(String.join(" OR ", clauses));
+        var spec = jdbcClient.sql(sql);
+        if (shopOrderId != null && !shopOrderId.isBlank()) {
+            spec = spec.param("shopOrderId", shopOrderId);
+        }
+        if (paypalOrderId != null && !paypalOrderId.isBlank()) {
+            spec = spec.param("paypalOrderId", paypalOrderId);
+        }
+        return spec.query(rowMapper).list();
+    }
+
     public void insert(CaseRecord c) {
         String sql = """
             INSERT INTO cases (

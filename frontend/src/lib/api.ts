@@ -87,6 +87,12 @@ export type ShopRefundRecord = components['schemas']['RefundResponseDto'];
 export type RefundResponseDto = components['schemas']['RefundResponseDto'];
 export type ShopShipmentRecord = components['schemas']['ShipmentResponseDto'];
 export type ShipmentResponseDto = components['schemas']['ShipmentResponseDto'];
+export type OrderTraceDto = components['schemas']['OrderTraceDto'];
+export type OrderTraceStepDto = components['schemas']['OrderTraceStepDto'];
+
+// PayPal Diagnostics types
+export type PayPalDiagnosticsDto = components['schemas']['PayPalDiagnosticsDto'];
+export type DiagnosticCheckDto = components['schemas']['DiagnosticCheckDto'];
 
 // Faults & Benchmark types
 export type DemoFaultSwitchesRecord = components['schemas']['DemoFaultsDto'];
@@ -523,6 +529,8 @@ export const api = {
 
     getOrderById: (id: string) => fetchApi<ShopOrderDto>(`/api/shop/orders/${id}`),
 
+    getTrace: (id: string) => fetchApi<OrderTraceDto>(`/api/shop/orders/${id}/trace`),
+
     createOrder: (req: CreateShopOrderRequest) =>
       fetchApi<ShopOrderDto>('/api/shop/orders', {
         method: 'POST',
@@ -586,6 +594,12 @@ export const api = {
   // --- Aggregated Telemetry Stats ---
   stats: {
     overview: () => fetchApi<StatsOverviewDto>('/api/stats/overview'),
+  },
+
+  // --- PayPal Diagnostics (Operator only) ---
+  paypal: {
+    diagnostics: () =>
+      fetchApi<PayPalDiagnosticsDto>('/api/paypal/diagnostics', { skipAuthRedirect: true }),
   },
 
   // --- Health & Probes ---

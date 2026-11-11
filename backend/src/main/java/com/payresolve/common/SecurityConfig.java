@@ -70,7 +70,7 @@ public class SecurityConfig {
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/actions/*/approve", "/api/actions/*/reject").hasRole("OPERATOR")
+                .requestMatchers("/api/actions/*/approve", "/api/actions/*/reject", "/api/paypal/diagnostics").hasRole("OPERATOR")
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/api/webhooks/**").permitAll()

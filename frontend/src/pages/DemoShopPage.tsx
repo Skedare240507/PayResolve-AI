@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { InfoTip } from '../components/InfoTip';
+import { LastUpdatedLabel } from '../components/LastUpdatedLabel';
+import { PaymentTraceStepper } from '../components/PaymentTraceStepper';
 import { api, type ProductRecord, type DemoFaultSwitchesRecord } from '../lib/api';
 import { toast } from '../lib/toast';
 import { CardSkeleton } from '../components/DataStates';
@@ -74,27 +76,53 @@ export default function DemoShopPage() {
 
   const products = (productsData && productsData.length > 0) ? productsData : DEFAULT_PRODUCTS;
 
-  // 2. Fetch Recent Orders from API
-  const { data: ordersData } = useQuery({
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  // 2. Fetch Recent Orders from API (auto-refresh every 5s when tab is visible)
+  const {
+    data: ordersData,
+    isLoading: ordersLoading,
+    dataUpdatedAt: ordersUpdatedAt,
+    isFetching: ordersFetching,
+  } = useQuery({
     queryKey: ['shop-orders'],
     queryFn: api.shop.getOrders,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   const recentOrders = useMemo(() => {
-    if (ordersData && ordersData.length > 0) {
-      return ordersData.slice(0, 6).map((o) => ({
-        id: `#${o.id.replace('ORD-', '')}`,
-        status: o.status === 'PAID' ? 'Paid' : o.status === 'REFUNDED' ? 'Refunded' : 'Pending',
-        amountMinor: o.totalMinor || 0,
-      }));
+    if (!ordersData || ordersData.length === 0) {
+      return [];
     }
-    return [
-      { id: '#10482', status: 'Pending', amountMinor: 8450 },
-      { id: '#10481', status: 'Paid', amountMinor: 2400 },
-      { id: '#10477', status: 'Paid', amountMinor: 3200 },
-      { id: '#10470', status: 'Refunded', amountMinor: 3850 },
-    ];
+    return ordersData.slice(0, 8).map((o) => {
+      const rawId = o.id || 'ORD-UNKNOWN';
+      const statusLabel =
+        o.status === 'PAID'
+          ? 'Paid'
+          : o.status === 'AWAITING_CONFIRMATION'
+          ? 'Awaiting webhook'
+          : o.status === 'REFUNDED'
+          ? 'Refunded'
+          : 'Pending';
+      return {
+        rawId,
+        displayId: `#${rawId.replace('ORD-', '')}`,
+        status: statusLabel,
+        rawStatus: o.status || 'PENDING',
+        amountMinor: o.totalMinor || 0,
+      };
+    });
   }, [ordersData]);
+
+  // 2b. Fetch Payment Trace for currently expanded order row
+  const expandedTraceQuery = useQuery({
+    queryKey: ['shop-order-trace', expandedOrderId],
+    queryFn: () => api.shop.getTrace(expandedOrderId ?? ''),
+    enabled: Boolean(expandedOrderId),
+    refetchInterval: expandedOrderId ? 5000 : false,
+    refetchIntervalInBackground: false,
+  });
 
   // 3. Fetch Fault Switches
   const { data: faultSwitchesData } = useQuery({
@@ -419,27 +447,87 @@ export default function DemoShopPage() {
             </div>
 
             {/* Recent Orders Card */}
-            <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-6 space-y-4 shadow-2xs">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Recent orders</h2>
-
-              <div className="space-y-3">
-                {recentOrders.map((ord) => (
-                  <div key={ord.id} className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="font-mono text-slate-800 dark:text-slate-200">{ord.id}</span>
-                    <span
-                      className={`px-3 py-0.5 rounded-full border text-xs ${
-                        ord.status === 'Paid'
-                          ? 'border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                          : ord.status === 'Refunded'
-                          ? 'border-purple-400 dark:border-purple-600 text-purple-600 dark:text-purple-400'
-                          : 'border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400'
-                      }`}
-                    >
-                      {ord.status}
-                    </span>
-                  </div>
-                ))}
+            <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 sm:p-6 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Recent orders</h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Click any order to inspect its payment trace.
+                  </p>
+                </div>
+                <LastUpdatedLabel dataUpdatedAt={ordersUpdatedAt} isFetching={ordersFetching} />
               </div>
+
+              {ordersLoading ? (
+                <div className="space-y-2.5 animate-pulse">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-9 rounded-lg bg-slate-100 dark:bg-slate-800/70" />
+                  ))}
+                </div>
+              ) : recentOrders.length === 0 ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400 py-4 text-center">
+                  No orders yet. Add items to cart and checkout with PayPal Sandbox.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {recentOrders.map((ord) => {
+                    const isExpanded = expandedOrderId === ord.rawId;
+                    return (
+                      <div
+                        key={ord.rawId}
+                        className="rounded-xl border border-slate-200/70 dark:border-slate-800/80 overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          onClick={() =>
+                            setExpandedOrderId((prev) => (prev === ord.rawId ? null : ord.rawId))
+                          }
+                          className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-xs sm:text-sm hover:bg-slate-50 dark:hover:bg-[#131b26] cursor-pointer transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <GoogleIcon
+                              name={isExpanded ? 'expand_less' : 'expand_more'}
+                              size={16}
+                              className="text-slate-400 shrink-0"
+                            />
+                            <span className="font-mono font-medium text-slate-800 dark:text-slate-200 truncate">
+                              {ord.displayId}
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-400">
+                              ${(ord.amountMinor / 100).toFixed(2)}
+                            </span>
+                          </div>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full border text-[11px] font-medium shrink-0 ${
+                              ord.status === 'Paid'
+                                ? 'border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                                : ord.status === 'Refunded'
+                                ? 'border-purple-400 dark:border-purple-600 text-purple-600 dark:text-purple-400'
+                                : ord.status === 'Awaiting webhook'
+                                ? 'border-blue-400 dark:border-blue-600 text-blue-600 dark:text-blue-400'
+                                : 'border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400'
+                            }`}
+                          >
+                            {ord.status}
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-3.5 py-3 bg-slate-50/70 dark:bg-[#0b111b] border-t border-slate-200/70 dark:border-slate-800/80">
+                            <PaymentTraceStepper
+                              compact
+                              trace={expandedTraceQuery.data}
+                              isLoading={expandedTraceQuery.isLoading}
+                              isError={expandedTraceQuery.isError}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
           </div>

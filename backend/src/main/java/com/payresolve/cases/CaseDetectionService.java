@@ -195,14 +195,33 @@ public class CaseDetectionService {
                       || (payments.stream().anyMatch(p -> p.paypalCaptureId() != null && Objects.equals(p.paypalCaptureId(), e.resourceId()))))
             .toList();
 
-        return DetectionSnapshot.builder()
+        DetectionSnapshot.Builder builder = DetectionSnapshot.builder()
             .targetId(order.paypalOrderId() != null ? order.paypalOrderId() : order.id())
             .shopOrder(order)
             .shopPayments(payments)
             .shopRefunds(refunds)
             .webhookEvents(relevantEvents)
             .evaluatedAt(clock.instant())
-            .gracePeriod(Duration.ZERO)
-            .build();
+            .gracePeriod(Duration.ZERO);
+
+        // If captured via PayPal API (> 60s ago) and webhook still has not confirmed, expose capture summary
+        // so PaidNotMarkedDetector can open a PAID_NOT_MARKED case when webhooks are dropped.
+        if (order.isAwaitingConfirmation()
+            && payments.isEmpty()
+            && order.capturedAt() != null
+            && clock.instant().isAfter(order.capturedAt().plusSeconds(60))) {
+            String capId = order.paypalCaptureId() != null ? order.paypalCaptureId() : "CAP-" + order.id();
+            builder.addPaypalCapture(new CaptureSummary(
+                capId,
+                "COMPLETED",
+                Amount.fromMoney(order.total()),
+                Boolean.TRUE,
+                null,
+                order.capturedAt().toString(),
+                order.capturedAt().toString()
+            ));
+        }
+
+        return builder.build();
     }
 }

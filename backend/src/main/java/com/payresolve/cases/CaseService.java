@@ -125,6 +125,12 @@ public class CaseService {
         return CaseDetailsDto.fromRecord(record);
     }
 
+    public List<CaseDetailsDto> findCasesForOrder(String shopOrderId, String paypalOrderId) {
+        return caseRepository.findByShopOrderOrPaypalOrder(shopOrderId, paypalOrderId).stream()
+            .map(CaseDetailsDto::fromRecord)
+            .toList();
+    }
+
     public PagedResponse<CaseDto> getCases(String status, String severity, String type, String search, int page, int size) {
         int offset = page * size;
         List<CaseRecord> records = caseRepository.findAll(status, severity, type, search, size, offset);

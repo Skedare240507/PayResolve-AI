@@ -4,6 +4,7 @@ import com.payresolve.common.ResourceNotFoundException;
 import com.payresolve.shop.dto.CaptureOrderResponseDto;
 import com.payresolve.shop.dto.CheckoutResponseDto;
 import com.payresolve.shop.dto.CreateShopOrderRequest;
+import com.payresolve.shop.dto.OrderTraceDto;
 import com.payresolve.shop.dto.ProductDto;
 import com.payresolve.shop.dto.RefundRequestDto;
 import com.payresolve.shop.dto.RefundResponseDto;
@@ -33,9 +34,11 @@ import java.util.List;
 public class ShopController {
 
     private final ShopOrderService shopOrderService;
+    private final OrderTraceService orderTraceService;
 
-    public ShopController(ShopOrderService shopOrderService) {
+    public ShopController(ShopOrderService shopOrderService, OrderTraceService orderTraceService) {
         this.shopOrderService = shopOrderService;
+        this.orderTraceService = orderTraceService;
     }
 
     // =========================================================================
@@ -79,6 +82,12 @@ public class ShopController {
                 .map(ShopOrderItemDto::from)
                 .toList();
         return ShopOrderDto.from(order, items);
+    }
+
+    @GetMapping("/orders/{id}/trace")
+    @Operation(summary = "Get ordered end-to-end payment lifecycle trace for a shop order")
+    public OrderTraceDto getOrderTrace(@PathVariable String id) {
+        return orderTraceService.getOrderTrace(id);
     }
 
     @PostMapping("/orders")

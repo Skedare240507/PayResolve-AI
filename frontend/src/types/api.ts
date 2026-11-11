@@ -485,6 +485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shop/orders/{id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get ordered end-to-end payment lifecycle trace for a shop order */
+        get: operations["getOrderTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shop/orders/{id}/refunds": {
         parameters: {
             query?: never;
@@ -494,6 +511,23 @@ export interface paths {
         };
         /** List refunds for a shop order */
         get: operations["getRefunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/paypal/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run PayPal Sandbox configuration and webhook checks (OPERATOR only) */
+        get: operations["getDiagnostics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1213,6 +1247,51 @@ export interface components {
             /** Format: double */
             price?: number;
             description?: string;
+        };
+        OrderTraceDto: {
+            orderId?: string;
+            paypalOrderId?: string;
+            orderStatus?: string;
+            /** Format: int64 */
+            totalMinor?: number;
+            currency?: string;
+            captureId?: string;
+            linkedCaseId?: string;
+            /** Format: date-time */
+            generatedAt?: string;
+            steps?: components["schemas"]["OrderTraceStepDto"][];
+        };
+        OrderTraceStepDto: {
+            id?: string;
+            label?: string;
+            status?: string;
+            completed?: boolean;
+            /** Format: date-time */
+            timestamp?: string;
+            timestampLabel?: string;
+            detail?: string;
+            externalRef?: string;
+            explanation?: string;
+        };
+        DiagnosticCheckDto: {
+            id?: string;
+            label?: string;
+            status?: string;
+            passed?: boolean;
+            detail?: string;
+            fixHint?: string;
+        };
+        PayPalDiagnosticsDto: {
+            overallOk?: boolean;
+            /** Format: date-time */
+            checkedAt?: string;
+            sandboxBaseUrl?: string;
+            expectedWebhookUrl?: string;
+            appId?: string;
+            businessAccount?: string;
+            /** Format: date-time */
+            lastWebhookReceivedAt?: string;
+            checks?: components["schemas"]["DiagnosticCheckDto"][];
         };
         LlmCallRecord: {
             /** Format: int64 */
@@ -2932,6 +3011,55 @@ export interface operations {
             };
         };
     };
+    getOrderTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTraceDto"];
+                };
+            };
+            /** @description Invalid request parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Requested resource was not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Unexpected internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     getRefunds: {
         parameters: {
             query?: never;
@@ -2963,6 +3091,44 @@ export interface operations {
             };
             /** @description Requested resource was not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Unexpected internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    getDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayPalDiagnosticsDto"];
+                };
+            };
+            /** @description Invalid request parameters or payload */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

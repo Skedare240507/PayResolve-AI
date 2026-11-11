@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -329,5 +330,29 @@ class ShopIntegrationTest {
                 .startsWith("http://localhost:5173")
                 .contains("/shop/cancel")
                 .doesNotContain(":8080");
+    }
+
+    @Test
+    @DisplayName("8. GET /api/shop/orders/{id}/trace returns ordered 8-step timeline and 404 when missing")
+    void traceEndpointReturnsOrderedSteps() throws Exception {
+        ShopOrder order = shopOrderService.createOrderFromCart(
+                List.of(new OrderItemRequest("mug", 1)),
+                "Trace Test",
+                "USD"
+        );
+
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/trace"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderId").value(order.id()))
+                .andExpect(jsonPath("$.orderStatus").value("PENDING"))
+                .andExpect(jsonPath("$.steps", hasSize(8)))
+                .andExpect(jsonPath("$.steps[0].id").value("ORDER_CREATED"))
+                .andExpect(jsonPath("$.steps[0].completed").value(true))
+                .andExpect(jsonPath("$.steps[1].id").value("PAYPAL_ORDER_CREATED"))
+                .andExpect(jsonPath("$.steps[1].timestampLabel").value("not yet"))
+                .andExpect(jsonPath("$.steps[7].id").value("CASE_OPENED"));
+
+        mockMvc.perform(get("/api/shop/orders/ORD-MISSING-999/trace"))
+                .andExpect(status().isNotFound());
     }
 }

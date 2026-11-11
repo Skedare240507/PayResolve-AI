@@ -1,103 +1,295 @@
-import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
-import { Link, useNavigate } from 'react-router-dom';
-import { ThemeToggle } from '../components/ThemeToggle';
-import { api } from '../lib/api';
-import { toast } from '../lib/toast';
+import { CardSkeleton, ErrorState } from '../components/DataStates';
+import { api, ApiError, type DiagnosticCheckDto } from '../lib/api';
+import { useAuth } from '../lib/authStore';
+
+function getCheckStyle(check: DiagnosticCheckDto): {
+  icon: string;
+  iconClass: string;
+  badgeClass: string;
+  label: string;
+} {
+  const status = (check.status || '').toUpperCase();
+  if (status === 'FAIL') {
+    return {
+      icon: 'cancel',
+      iconClass: 'text-rose-600 dark:text-rose-400',
+      badgeClass: 'border-rose-300 dark:border-rose-700/70 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/30',
+      label: 'FAIL',
+    };
+  }
+  if (status === 'WARN') {
+    return {
+      icon: 'warning',
+      iconClass: 'text-amber-600 dark:text-amber-400',
+      badgeClass: 'border-amber-300 dark:border-amber-700/70 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30',
+      label: 'WARN',
+    };
+  }
+  if (status === 'INFO') {
+    return {
+      icon: 'info',
+      iconClass: 'text-blue-600 dark:text-blue-400',
+      badgeClass: 'border-blue-300 dark:border-blue-700/70 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30',
+      label: 'INFO',
+    };
+  }
+  return {
+    icon: 'check_circle',
+    iconClass: 'text-emerald-600 dark:text-emerald-400',
+    badgeClass: 'border-emerald-300 dark:border-emerald-700/70 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30',
+    label: 'PASS',
+  };
+}
 
 export default function SandboxStatusPage() {
-  const navigate = useNavigate();
-  const [retrying, setRetrying] = useState(false);
+  const { user } = useAuth();
+  const isOperator = user?.role === 'operator';
 
-  const handleRetry = async () => {
-    setRetrying(true);
-    try {
-      const health = await api.health.get().catch(() => ({ status: 'UP' }));
-      if (health.status === 'UP') {
-        toast.info('Local services operational. PayPal Sandbox remains in simulated offline mode.');
-      } else {
-        toast.warning('Services currently degraded.');
-      }
-    } catch {
-      toast.warning('Could not reach PayPal Sandbox.');
-    } finally {
-      setTimeout(() => {
-        setRetrying(false);
-        navigate('/queue');
-      }, 700);
-    }
-  };
+  const healthQuery = useQuery({
+    queryKey: ['actuator-health'],
+    queryFn: api.health.get,
+    retry: 1,
+  });
 
-  const statusRows = [
-    { label: 'PayPal Sandbox API', status: 'Unreachable', color: 'rose' },
-    { label: 'Webhook inbox', status: 'Operational', color: 'emerald' },
-    { label: 'Rules engine', status: 'Operational', color: 'emerald' },
-    { label: 'AI investigator', status: 'Degraded', color: 'amber' },
-  ];
+  const diagnosticsQuery = useQuery({
+    queryKey: ['paypal-diagnostics'],
+    queryFn: api.paypal.diagnostics,
+    enabled: isOperator,
+    retry: false,
+  });
+
+  const isForbidden =
+    diagnosticsQuery.error instanceof ApiError && diagnosticsQuery.error.status === 403;
+
+  const diag = diagnosticsQuery.data;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#080c14] text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative">
-      <div className="absolute top-6 right-6">
-        <ThemeToggle />
-      </div>
-
-      <div className="w-full max-w-lg text-center space-y-6">
-        {/* Wifi icon */}
-        <div className="flex justify-center">
-          <GoogleIcon name="wifi" size={26} className="text-emerald-600 dark:text-emerald-400" />
-        </div>
-
-        {/* Title & subtitle */}
-        <div className="space-y-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            PayPal Sandbox is not reachable
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-            New payments cannot be created right now. Existing cases, the graph and the timeline still work from stored data.
-          </p>
-        </div>
-
-        {/* Status table card */}
-        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 divide-y divide-slate-100 dark:divide-slate-800/80 text-left shadow-xs">
-          {statusRows.map(({ label, status, color }) => {
-            const badgeClasses =
-              color === 'rose'
-                ? 'border-rose-400 dark:border-rose-700/70 text-rose-600 dark:text-rose-400 bg-rose-50/40 dark:bg-rose-950/20'
-                : color === 'emerald'
-                ? 'border-emerald-400 dark:border-emerald-700/70 text-emerald-600 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20'
-                : 'border-amber-400 dark:border-amber-700/70 text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20';
-
-            return (
-              <div key={label} className="py-3.5 flex items-center justify-between first:pt-1 last:pb-1">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+    <AppLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+                Sandbox diagnostics
+              </h1>
+              <span
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full border ${
+                  healthQuery.data?.status === 'UP'
+                    ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30'
+                    : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30'
+                }`}
+              >
                 <span
-                  className={`inline-flex items-center text-xs font-medium px-3 py-0.5 rounded-full border ${badgeClasses}`}
-                >
-                  {status}
-                </span>
-              </div>
-            );
-          })}
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    healthQuery.data?.status === 'UP' ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                />
+                Backend {healthQuery.data?.status ?? (healthQuery.isLoading ? 'checking...' : 'unreachable')}
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Live checks for PayPal Sandbox OAuth credentials, registered webhook URL, events, and delivery health. No secrets are exposed.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {isOperator && (
+              <button
+                type="button"
+                onClick={() => diagnosticsQuery.refetch()}
+                disabled={diagnosticsQuery.isFetching}
+                className="px-4 py-2 rounded-xl bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white text-xs font-semibold shadow-sm cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <GoogleIcon
+                  name="refresh"
+                  size={15}
+                  className={diagnosticsQuery.isFetching ? 'animate-spin' : ''}
+                />
+                <span>{diagnosticsQuery.isFetching ? 'Checking...' : 'Re-run diagnostics'}</span>
+              </button>
+            )}
+            <Link
+              to="/shop"
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#131b26] text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Demo Shop
+            </Link>
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-center gap-3 pt-1">
-          <button
-            onClick={handleRetry}
-            disabled={retrying}
-            className="px-5 py-2.5 rounded-lg bg-[#0066cc] hover:bg-blue-600 active:scale-[0.98] text-white font-medium text-xs sm:text-sm shadow-sm cursor-pointer transition-all flex items-center space-x-2 disabled:opacity-60"
-          >
-            <GoogleIcon name="refresh" size={15} className={`text-white ${retrying ? 'animate-spin' : ''}`} />
-            <span>{retrying ? 'Retrying...' : 'Retrying'}</span>
-          </button>
-          <Link
-            to="/queue"
-            className="px-5 py-2.5 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] font-medium text-xs sm:text-sm shadow-xs cursor-pointer transition-all"
-          >
-            Continue read-only
-          </Link>
-        </div>
+        {/* Viewer Role Notice */}
+        {!isOperator || isForbidden ? (
+          <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-amber-200 dark:border-amber-800/70 p-6 space-y-3 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 shrink-0">
+                <GoogleIcon name="lock" size={20} />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Operator role required for PayPal diagnostics
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Live credential verification and registered webhook inspection (<code className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">GET /api/paypal/diagnostics</code>) are restricted to operators. You can still inspect existing cases, the evidence graph, and the event inbox in read-only mode.
+                </p>
+                <div className="pt-2 flex items-center gap-3">
+                  <Link
+                    to="/queue"
+                    className="px-4 py-2 rounded-lg bg-[#0066cc] text-white text-xs font-semibold hover:bg-blue-600 transition-colors"
+                  >
+                    Go to Exception Queue
+                  </Link>
+                  <Link
+                    to="/sign-in"
+                    className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Switch account
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : diagnosticsQuery.isLoading ? (
+          <CardSkeleton count={3} />
+        ) : diagnosticsQuery.isError ? (
+          <ErrorState
+            message={
+              diagnosticsQuery.error instanceof Error
+                ? diagnosticsQuery.error.message
+                : 'Failed to run PayPal diagnostics.'
+            }
+            onRetry={() => diagnosticsQuery.refetch()}
+          />
+        ) : diag ? (
+          <>
+            {/* Overview Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 space-y-1.5 shadow-2xs">
+                <span className="text-xs text-slate-500 dark:text-slate-400">Overall status</span>
+                <div className="flex items-center gap-2">
+                  <GoogleIcon
+                    name={diag.overallOk ? 'verified' : 'error_outline'}
+                    size={22}
+                    className={
+                      diag.overallOk
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                    }
+                  />
+                  <span className="text-base font-bold text-slate-900 dark:text-white">
+                    {diag.overallOk ? 'Ready for Sandbox payments' : 'Configuration needs fixes'}
+                  </span>
+                </div>
+                <p className="text-[11px] font-mono text-slate-400">
+                  Checked {diag.checkedAt ? new Date(diag.checkedAt).toLocaleTimeString([], { hour12: false }) : 'now'}
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 space-y-1.5 shadow-2xs">
+                <span className="text-xs text-slate-500 dark:text-slate-400">Expected webhook target</span>
+                <div className="text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 break-all">
+                  {diag.expectedWebhookUrl || 'Not configured'}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Last received:{' '}
+                  <span className="font-mono">
+                    {diag.lastWebhookReceivedAt
+                      ? new Date(diag.lastWebhookReceivedAt).toLocaleString()
+                      : 'none yet'}
+                  </span>
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 space-y-1.5 shadow-2xs">
+                <span className="text-xs text-slate-500 dark:text-slate-400">Sandbox app &amp; business account</span>
+                <div className="text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 break-all">
+                  {diag.businessAccount || diag.appId || 'Unavailable (OAuth failed)'}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {diag.appId ? `PayPal App ID: ${diag.appId}` : 'Connect valid credentials to read App ID'}
+                </p>
+              </div>
+            </div>
+
+            {/* Diagnostics Checklist */}
+            <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    PayPal Sandbox Checklist
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Every check shows clear fix hints when configuration or webhook registration fails.
+                  </p>
+                </div>
+              </div>
+
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800/80" data-testid="diagnostics-checklist">
+                {(diag.checks || []).map((check) => {
+                  const style = getCheckStyle(check);
+                  return (
+                    <li key={check.id || check.label} className="p-5 sm:px-6 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <GoogleIcon
+                            name={style.icon}
+                            size={20}
+                            className={`${style.iconClass} mt-0.5 shrink-0`}
+                          />
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                              {check.label}
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                              {check.detail}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${style.badgeClass}`}
+                        >
+                          {style.label}
+                        </span>
+                      </div>
+
+                      {check.fixHint && (
+                        <div
+                          className={`ml-8 p-3 rounded-xl border text-xs leading-relaxed flex items-start gap-2 ${
+                            check.passed
+                              ? 'bg-slate-50 dark:bg-[#131b26] border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                              : 'bg-amber-50/80 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+                          }`}
+                        >
+                          <GoogleIcon
+                            name="lightbulb"
+                            size={15}
+                            className={
+                              check.passed
+                                ? 'text-blue-500 shrink-0 mt-0.5'
+                                : 'text-amber-600 dark:text-amber-400 shrink-0 mt-0.5'
+                            }
+                          />
+                          <div>
+                            <span className="font-semibold">
+                              {check.passed ? 'Note: ' : 'How to fix: '}
+                            </span>
+                            {check.fixHint}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>
+        ) : null}
       </div>
-    </div>
+    </AppLayout>
   );
 }

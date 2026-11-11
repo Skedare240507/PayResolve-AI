@@ -123,6 +123,12 @@ public class WebhookWorkerService {
         try {
             if ("PAYMENT.CAPTURE.COMPLETED".equalsIgnoreCase(event.eventType())) {
                 processPaymentCaptureCompleted(event);
+            } else if ("CHECKOUT.ORDER.APPROVED".equalsIgnoreCase(event.eventType())) {
+                String ppOrderId = event.paypalOrderId() != null ? event.paypalOrderId() : event.resourceId();
+                Instant approvedAt = event.eventCreatedAt() != null ? event.eventCreatedAt() : event.receivedAt();
+                shopOrderService.markBuyerApproved(ppOrderId, event.customId(), approvedAt);
+                log.info("Recorded buyer approval timestamp from CHECKOUT.ORDER.APPROVED for order {}",
+                    ppOrderId != null ? ppOrderId : event.customId());
             } else {
                 log.info("Acknowledged non-capture webhook event (type={})", event.eventType());
             }
@@ -148,7 +154,12 @@ public class WebhookWorkerService {
             }
 
             String captureId = resource.hasNonNull("id") ? resource.get("id").asText() : event.resourceId();
-            String customId = resource.hasNonNull("custom_id") ? resource.get("custom_id").asText() : null;
+            String customId = resource.hasNonNull("custom_id") ? resource.get("custom_id").asText() : event.customId();
+            if ((customId == null || customId.isBlank()) && event.paypalOrderId() != null) {
+                customId = shopOrderService.findOrderByPayPalOrderId(event.paypalOrderId())
+                    .map(com.payresolve.shop.ShopOrder::id)
+                    .orElse(null);
+            }
 
             Money amount = Money.of(0L, "USD");
             if (resource.hasNonNull("amount")) {
@@ -187,6 +198,7 @@ public class WebhookWorkerService {
         } else {
             log.error("Webhook event {} exceeded maximum attempts ({}/{}). Marked as FAILED.",
                 event.paypalEventId(), nextAttempts, maxAttempts);
+            caseDetectionService.detectForEvent(event);
         }
     }
 }

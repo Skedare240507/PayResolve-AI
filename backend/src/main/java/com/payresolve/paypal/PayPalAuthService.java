@@ -35,6 +35,11 @@ public class PayPalAuthService {
 
     private volatile String cachedToken;
     private volatile Instant tokenExpiresAt = Instant.MIN;
+    private volatile String lastAppId;
+    private volatile String lastScope;
+    private volatile Long lastExpiresIn;
+
+    public record PayPalTokenMetadata(String appId, String scope, Long expiresInSeconds) {}
 
     public PayPalAuthService(PayPalProperties properties, Clock clock) {
         this.properties = properties;
@@ -90,6 +95,22 @@ public class PayPalAuthService {
         }
     }
 
+    /**
+     * Forces a fresh OAuth2 client_credentials exchange to verify live PayPal credentials
+     * and returns non-secret metadata (appId, scope, expiresInSeconds). Never exposes accessToken.
+     */
+    public PayPalTokenMetadata verifyCredentialsAndGetMetadata() {
+        lock.lock();
+        try {
+            this.cachedToken = null;
+            this.tokenExpiresAt = Instant.MIN;
+            refreshToken();
+            return new PayPalTokenMetadata(lastAppId, lastScope, lastExpiresIn);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void refreshToken() {
         if (properties.clientId() == null || properties.clientId().isBlank()
             || properties.clientSecret() == null || properties.clientSecret().isBlank()) {
@@ -129,6 +150,9 @@ public class PayPalAuthService {
 
             this.cachedToken = response.accessToken();
             this.tokenExpiresAt = clock.instant().plusSeconds(expiresInSeconds);
+            this.lastAppId = response.appId();
+            this.lastScope = response.scope();
+            this.lastExpiresIn = expiresInSeconds;
 
             log.info("Successfully obtained PayPal access token (expires in {}s)", expiresInSeconds);
         } catch (PayPalApiException e) {

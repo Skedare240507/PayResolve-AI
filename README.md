@@ -152,20 +152,23 @@ It prints an `https://...trycloudflare.com` address. That address changes every 
 
 If you create a new webhook later, its id changes too, so update `.env` again. A mismatched id makes signature checks fail.
 
-### 7. Try it
+### 7. Try it (Sandbox buyer test sequence)
 
-1. Sign in as the operator.
-2. Open Demo shop and switch on "Fail webhook handler".
-3. Add something to the cart and pay with the PayPal Sandbox button. Approve the payment with a Sandbox buyer account from your PayPal developer dashboard.
-4. Open the Queue. A "Paid, not marked" case should appear.
-5. Open it, press Investigate, then approve or reject the suggested action.
-6. Open Events to see the stored webhook, and Actions to see the audit log.
+1. Sign in as the **Operator**.
+2. Open **Status** (`/status`, or click **Sandbox mode LIVE** at the bottom of the sidebar) to run PayPal Diagnostics (`GET /api/paypal/diagnostics`). Confirm that `PAYPAL_BASE_URL`, OAuth credentials, `PAYPAL_WEBHOOK_ID`, and your registered webhook URL (`APP_PUBLIC_URL + /api/webhooks/paypal`) all show `PASS`.
+3. Open **Demo shop** (`/shop`). For a clean happy path first, click **Reset all to false** on the Fault switches card; or enable **Fail webhook handler** to observe a live discrepancy.
+4. Add items to the cart and click **Pay with PayPal Sandbox**.
+5. Sign in with your **personal PayPal Sandbox buyer account** from the PayPal Developer Dashboard (never reuse real passwords or share credentials) and click **Complete Purchase / Pay Now**.
+6. PayPal redirects to `/shop/return`. Do not refresh: watch the animated loader poll `GET /api/shop/orders/{id}` every 2 seconds (`Payment captured` -> `Waiting for PayPal's confirmation (webhook)` -> `PAID` on happy path, or a 60-second delayed-confirmation alert if no webhook arrives).
+7. Inspect the vertical **Payment trace** stepper on `/shop/return` (or expand the order row in **Demo shop** Recent orders) to see timestamps and info tooltips for every step from Order created to Case opened.
+8. **Events**, **Exception queue**, and **Demo shop** recent orders auto-refresh every 5 seconds while visible (`updated just now`). When a fault switch causes a failure, open the opened case in the Queue, click **Investigate**, and approve or reject the proposed action.
 
 ### Tests and checks
 
 ```bash
-cd backend && ./mvnw verify        # needs Docker for Testcontainers
+cd backend && ./mvnw verify        # needs Docker for Testcontainers (H2 & WireMock suites run even without Docker)
 cd frontend && npm run lint && npm run build
+node scripts/test-return-polling.mjs  # Playwright smoke test for /shop/return polling & 60s timeout
 ```
 
 ### API tests with Postman

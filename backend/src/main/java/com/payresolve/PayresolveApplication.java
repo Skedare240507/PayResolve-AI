@@ -120,8 +120,19 @@ public class PayresolveApplication {
                     .locations("classpath:db/migration")
                     .baselineOnMigrate(false)
                     .load();
-                MigrateResult result = flyway.migrate();
-                System.out.println("Flyway migration completed successfully: " + result.migrationsExecuted + " migrations executed.");
+                try {
+                    MigrateResult result = flyway.migrate();
+                    System.out.println("Flyway migration completed successfully: " + result.migrationsExecuted + " migrations executed.");
+                } catch (org.flywaydb.core.api.exception.FlywayValidateException ve) {
+                    if (ve.getMessage() != null && ve.getMessage().contains("migration version 5")) {
+                        System.out.println("Repairing historical Flyway migration v5 checksum mismatch before migrating...");
+                        flyway.repair();
+                        MigrateResult result = flyway.migrate();
+                        System.out.println("Flyway migration completed after repair: " + result.migrationsExecuted + " migrations executed.");
+                    } else {
+                        throw ve;
+                    }
+                }
             } catch (Exception e) {
                 System.err.println("Flyway migration exception: " + SensitiveDataMasker.mask(e.getMessage()));
             }

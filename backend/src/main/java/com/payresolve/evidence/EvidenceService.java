@@ -604,7 +604,9 @@ public class EvidenceService {
             log.warn("Failed to serialize payload for evidence {}: {}", externalId, e.getMessage());
         }
 
-        String evidenceId = "EVI-" + kind.name().toLowerCase() + "-" + (externalId != null ? externalId.replace("#", "") : UUID.randomUUID().toString().substring(0, 8));
+        String rawEvidenceId = "EVI-" + caseId + "-" + kind.name().toLowerCase() + "-"
+            + (externalId != null ? externalId.replace("#", "") : UUID.randomUUID().toString().substring(0, 8));
+        String evidenceId = rawEvidenceId.length() > 100 ? rawEvidenceId.substring(0, 100) : rawEvidenceId;
         return new CaseEvidenceRecord(
             evidenceId,
             caseId,

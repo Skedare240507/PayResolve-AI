@@ -95,6 +95,59 @@ public class WebhookEventRepository {
             .single();
     }
 
+    public Optional<Instant> findLastReceivedAt() {
+        Timestamp ts = jdbcClient.sql("SELECT MAX(COALESCE(last_received_at, received_at)) FROM webhook_events")
+            .query(Timestamp.class)
+            .single();
+        return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
+    }
+
+    /**
+     * Finds webhook events matching a shop order by custom_id, paypal_order_id, resource_id, or raw body reference.
+     */
+    public List<WebhookEvent> findByOrderRefs(String shopOrderId, String paypalOrderId, String captureId) {
+        List<String> clauses = new java.util.ArrayList<>();
+        if (shopOrderId != null && !shopOrderId.isBlank()) {
+            clauses.add("custom_id = :shopOrderId");
+            clauses.add("raw_body LIKE :shopOrderPattern");
+        }
+        if (paypalOrderId != null && !paypalOrderId.isBlank()) {
+            clauses.add("paypal_order_id = :paypalOrderId");
+            clauses.add("resource_id = :paypalOrderId");
+            clauses.add("raw_body LIKE :paypalOrderPattern");
+        }
+        if (captureId != null && !captureId.isBlank()) {
+            clauses.add("resource_id = :captureId");
+            clauses.add("raw_body LIKE :capturePattern");
+        }
+        if (clauses.isEmpty()) {
+            return List.of();
+        }
+
+        String sql = """
+            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
+                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
+            FROM webhook_events
+            WHERE %s
+            ORDER BY received_at ASC, id ASC
+            """.formatted(String.join(" OR ", clauses));
+
+        var spec = jdbcClient.sql(sql);
+        if (shopOrderId != null && !shopOrderId.isBlank()) {
+            spec = spec.param("shopOrderId", shopOrderId)
+                       .param("shopOrderPattern", "%" + shopOrderId + "%");
+        }
+        if (paypalOrderId != null && !paypalOrderId.isBlank()) {
+            spec = spec.param("paypalOrderId", paypalOrderId)
+                       .param("paypalOrderPattern", "%" + paypalOrderId + "%");
+        }
+        if (captureId != null && !captureId.isBlank()) {
+            spec = spec.param("captureId", captureId)
+                       .param("capturePattern", "%" + captureId + "%");
+        }
+        return spec.query(rowMapper).list();
+    }
+
     /**
      * Inserts or updates incoming webhook event on conflict (paypal_event_id).
      * If already present, increments delivery_count and updates last_received_at.

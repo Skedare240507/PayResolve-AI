@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS shop_orders (
     total_minor BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
     customer_label VARCHAR(255),
+    paypal_order_created_at TIMESTAMP WITH TIME ZONE,
+    buyer_approved_at TIMESTAMP WITH TIME ZONE,
+    captured_at TIMESTAMP WITH TIME ZONE,
+    paypal_capture_id VARCHAR(100),
+    paid_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

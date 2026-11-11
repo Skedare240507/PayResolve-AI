@@ -6,6 +6,8 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -21,10 +23,19 @@ public class CaseEvidenceRepository {
     private static final Logger log = LoggerFactory.getLogger(CaseEvidenceRepository.class);
 
     private final JdbcClient jdbcClient;
+    private final boolean isPostgres;
     private final EvidenceRowMapper rowMapper = new EvidenceRowMapper();
 
-    public CaseEvidenceRepository(JdbcClient jdbcClient) {
+    public CaseEvidenceRepository(JdbcClient jdbcClient, DataSource dataSource) {
         this.jdbcClient = jdbcClient;
+        boolean pg = true;
+        try (Connection conn = dataSource.getConnection()) {
+            String dbName = conn.getMetaData().getDatabaseProductName();
+            pg = dbName != null && dbName.toLowerCase().contains("postgres");
+        } catch (Exception e) {
+            log.warn("Could not determine database product name, defaulting isPostgres to true: {}", e.getMessage());
+        }
+        this.isPostgres = pg;
     }
 
     public List<CaseEvidenceRecord> findByCaseId(String caseId) {
@@ -40,14 +51,27 @@ public class CaseEvidenceRepository {
             .list();
     }
 
+    /**
+     * Inserts a normalized evidence record idempotently so concurrent graph/timeline derivations
+     * on the same case cannot fail with a primary-key DuplicateKeyException.
+     */
     public void insert(CaseEvidenceRecord record) {
-        String sql = """
-            INSERT INTO case_evidence (
-                id, case_id, kind, source, external_id, payload_json, observed_at
-            ) VALUES (
-                :id, :caseId, :kind, :source, :externalId, CAST(:payloadJson AS jsonb), :observedAt
-            )
-            """;
+        String sql = isPostgres
+            ? """
+              INSERT INTO case_evidence (
+                  id, case_id, kind, source, external_id, payload_json, observed_at
+              ) VALUES (
+                  :id, :caseId, :kind, :source, :externalId, CAST(:payloadJson AS jsonb), :observedAt
+              )
+              ON CONFLICT (id) DO NOTHING
+              """
+            : """
+              MERGE INTO case_evidence (
+                  id, case_id, kind, source, external_id, payload_json, observed_at
+              ) KEY(id) VALUES (
+                  :id, :caseId, :kind, :source, :externalId, CAST(:payloadJson AS jsonb), :observedAt
+              )
+              """;
 
         Instant observed = record.observedAt() != null ? record.observedAt() : Instant.now();
 
@@ -61,7 +85,7 @@ public class CaseEvidenceRepository {
             .param("observedAt", Timestamp.from(observed))
             .update();
 
-        log.debug("Inserted evidence item: id={}, caseId={}, kind={}", record.id(), record.caseId(), record.kind());
+        log.debug("Upserted evidence item: id={}, caseId={}, kind={}", record.id(), record.caseId(), record.kind());
     }
 
     public void deleteByCaseId(String caseId) {

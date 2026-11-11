@@ -14,6 +14,7 @@ import type {
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { InfoTip } from '../components/InfoTip';
+import { LastUpdatedLabel } from '../components/LastUpdatedLabel';
 import { HeaderWithInfoTip } from '../components/grid/HeaderWithInfoTip';
 import { CountUp } from '../components/CountUp';
 import { CopyableIdCell, SeverityPillCell, StatusPillCell } from '../components/grid/GridCellRenderers';
@@ -83,12 +84,14 @@ export default function ExceptionQueuePage() {
   const [selectedSeverity, setSelectedSeverity] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
 
-  // 1. Fetch Cases
+  // 1. Fetch Cases (auto-refresh every 5s when tab is visible)
   const {
     data: pagedData,
     isLoading: casesLoading,
     isError: casesError,
     refetch: refetchCases,
+    dataUpdatedAt: casesUpdatedAt,
+    isFetching: casesFetching,
   } = useQuery({
     queryKey: ['cases', selectedStatus],
     queryFn: () =>
@@ -96,12 +99,16 @@ export default function ExceptionQueuePage() {
         status: selectedStatus !== 'All' ? selectedStatus.toUpperCase() : undefined,
         size: 50,
       }),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   // 2. Fetch Stats
   const { data: statsData } = useQuery({
     queryKey: ['case-stats'],
     queryFn: api.cases.stats,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   // Run Detectors Mutation
@@ -331,7 +338,8 @@ export default function ExceptionQueuePage() {
               Every detected case, newest first.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <LastUpdatedLabel dataUpdatedAt={casesUpdatedAt} isFetching={casesFetching} />
             <button
               onClick={() => seedMutation.mutate()}
               disabled={seedMutation.isPending}

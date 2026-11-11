@@ -12,6 +12,7 @@ import type {
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { InfoTip } from '../components/InfoTip';
+import { LastUpdatedLabel } from '../components/LastUpdatedLabel';
 import { HeaderWithInfoTip } from '../components/grid/HeaderWithInfoTip';
 import { CopyableIdCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, fetchApi, type WebhookEventRecord } from '../lib/api';
@@ -48,21 +49,27 @@ export default function EventInboxPage() {
   const [gridApi, setGridApi] = useState<GridApi<DisplayEvent> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Fetch Events
+  // 1. Fetch Events (auto-refresh every 5s when tab is visible)
   const {
     data: pagedData,
     isLoading: eventsLoading,
     isError: eventsError,
     refetch: refetchEvents,
+    dataUpdatedAt: eventsUpdatedAt,
+    isFetching: eventsFetching,
   } = useQuery({
     queryKey: ['events'],
     queryFn: () => api.events.list({ limit: 100 }),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   // 2. Fetch Stats
   const { data: statsData } = useQuery({
     queryKey: ['events-stats'],
     queryFn: api.events.stats,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   // Map backend webhook_events to DisplayEvent (real rows only, no mock fallback)
@@ -275,7 +282,8 @@ export default function EventInboxPage() {
               Every PayPal webhook, stored raw before it is processed.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <LastUpdatedLabel dataUpdatedAt={eventsUpdatedAt} isFetching={eventsFetching} />
             <button
               onClick={() => {
                 queryClient.invalidateQueries({ queryKey: ['events'] });

@@ -76,5 +76,41 @@ class EvidenceIntegrationTest {
         mockMvc.perform(get("/api/cases/PR-NONEXISTENT/timeline"))
             .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("Concurrent graph and timeline derivation is idempotent and never throws DuplicateKeyException")
+    void concurrentGraphAndTimelineDoNotCollide(
+        @Autowired EvidenceService evidenceService,
+        @Autowired CaseEvidenceRepository evidenceRepository
+    ) throws Exception {
+        evidenceRepository.deleteByCaseId("PR-0142");
+
+        java.util.concurrent.CountDownLatch startGate = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var graphFuture = pool.submit(() -> {
+                startGate.await();
+                return evidenceService.deriveGraph("PR-0142");
+            });
+            var timelineFuture = pool.submit(() -> {
+                startGate.await();
+                return evidenceService.deriveTimeline("PR-0142");
+            });
+
+            startGate.countDown();
+            var graph = graphFuture.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            var timeline = timelineFuture.get(10, java.util.concurrent.TimeUnit.SECONDS);
+
+            org.assertj.core.api.Assertions.assertThat(graph.caseId()).isEqualTo("PR-0142");
+            org.assertj.core.api.Assertions.assertThat(timeline.caseId()).isEqualTo("PR-0142");
+
+            // Calling repository insert twice with same ID is also idempotent
+            var existing = evidenceRepository.findByCaseId("PR-0142");
+            org.assertj.core.api.Assertions.assertThat(existing).isNotEmpty();
+            evidenceRepository.insert(existing.getFirst());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }
 

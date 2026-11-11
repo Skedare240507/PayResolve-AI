@@ -110,24 +110,39 @@ public class ShopOrderService {
     // Order Management
     // =========================================================================
 
+    private static final String ORDER_SELECT_COLUMNS = """
+            id, paypal_order_id, status, total_minor, currency, customer_label,
+            created_at, updated_at, paypal_order_created_at, buyer_approved_at,
+            captured_at, paypal_capture_id, paid_at
+            """;
+
+    private static ShopOrder mapShopOrder(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new ShopOrder(
+            rs.getString("id"),
+            rs.getString("paypal_order_id"),
+            rs.getString("status"),
+            rs.getLong("total_minor"),
+            rs.getString("currency"),
+            rs.getString("customer_label"),
+            toInstant(rs.getTimestamp("created_at")),
+            toInstant(rs.getTimestamp("updated_at")),
+            toInstant(rs.getTimestamp("paypal_order_created_at")),
+            toInstant(rs.getTimestamp("buyer_approved_at")),
+            toInstant(rs.getTimestamp("captured_at")),
+            rs.getString("paypal_capture_id"),
+            toInstant(rs.getTimestamp("paid_at"))
+        );
+    }
+
+    private static Instant toInstant(Timestamp ts) {
+        return ts != null ? ts.toInstant() : null;
+    }
+
     public Optional<ShopOrder> findOrderById(String id) {
         Objects.requireNonNull(id, "Order id must not be null");
-        return jdbcClient.sql("""
-            SELECT id, paypal_order_id, status, total_minor, currency, customer_label, created_at, updated_at
-            FROM shop_orders
-            WHERE id = :id
-            """)
+        return jdbcClient.sql("SELECT " + ORDER_SELECT_COLUMNS + " FROM shop_orders WHERE id = :id")
             .param("id", id)
-            .query((rs, rowNum) -> new ShopOrder(
-                rs.getString("id"),
-                rs.getString("paypal_order_id"),
-                rs.getString("status"),
-                rs.getLong("total_minor"),
-                rs.getString("currency"),
-                rs.getString("customer_label"),
-                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
-                rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null
-            ))
+            .query(ShopOrderService::mapShopOrder)
             .optional();
     }
 
@@ -135,44 +150,17 @@ public class ShopOrderService {
         if (paypalOrderId == null || paypalOrderId.isBlank()) {
             return Optional.empty();
         }
-        return jdbcClient.sql("""
-            SELECT id, paypal_order_id, status, total_minor, currency, customer_label, created_at, updated_at
-            FROM shop_orders
-            WHERE paypal_order_id = :paypalOrderId
-            """)
+        return jdbcClient.sql("SELECT " + ORDER_SELECT_COLUMNS + " FROM shop_orders WHERE paypal_order_id = :paypalOrderId")
             .param("paypalOrderId", paypalOrderId)
-            .query((rs, rowNum) -> new ShopOrder(
-                rs.getString("id"),
-                rs.getString("paypal_order_id"),
-                rs.getString("status"),
-                rs.getLong("total_minor"),
-                rs.getString("currency"),
-                rs.getString("customer_label"),
-                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
-                rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null
-            ))
+            .query(ShopOrderService::mapShopOrder)
             .optional();
     }
 
     public List<ShopOrder> findAllOrders(int limit, int offset) {
-        return jdbcClient.sql("""
-            SELECT id, paypal_order_id, status, total_minor, currency, customer_label, created_at, updated_at
-            FROM shop_orders
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-            """)
+        return jdbcClient.sql("SELECT " + ORDER_SELECT_COLUMNS + " FROM shop_orders ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
             .param("limit", limit)
             .param("offset", offset)
-            .query((rs, rowNum) -> new ShopOrder(
-                rs.getString("id"),
-                rs.getString("paypal_order_id"),
-                rs.getString("status"),
-                rs.getLong("total_minor"),
-                rs.getString("currency"),
-                rs.getString("customer_label"),
-                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
-                rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null
-            ))
+            .query(ShopOrderService::mapShopOrder)
             .list();
     }
 
@@ -300,8 +288,12 @@ public class ShopOrderService {
         // Build return/cancel URLs using the UI origin so the buyer lands on the
         // shop UI pages after PayPal approval, not on the API server.
         // The shop UI handles /shop/return and /shop/cancel and reads query params.
-        String effectiveReturnUrl = (returnUrl != null && !returnUrl.isBlank()) ? returnUrl : (frontendOrigin + "/shop/return");
-        String effectiveCancelUrl = (cancelUrl != null && !cancelUrl.isBlank()) ? cancelUrl : (frontendOrigin + "/shop/cancel");
+        String effectiveReturnUrl = (returnUrl != null && !returnUrl.isBlank())
+            ? returnUrl
+            : (frontendOrigin + "/shop/return?orderId=" + order.id());
+        String effectiveCancelUrl = (cancelUrl != null && !cancelUrl.isBlank())
+            ? cancelUrl
+            : (frontendOrigin + "/shop/cancel?orderId=" + order.id());
 
         PayPalOrder payPalOrder = payPalOrdersClient.createOrder(
             order.id(),
@@ -313,10 +305,13 @@ public class ShopOrderService {
         Instant now = clock.instant();
         jdbcClient.sql("""
             UPDATE shop_orders
-            SET paypal_order_id = :paypalOrderId, updated_at = :updatedAt
+            SET paypal_order_id = :paypalOrderId,
+                paypal_order_created_at = :paypalOrderCreatedAt,
+                updated_at = :updatedAt
             WHERE id = :id
             """)
             .param("paypalOrderId", payPalOrder.id())
+            .param("paypalOrderCreatedAt", Timestamp.from(now))
             .param("updatedAt", Timestamp.from(now))
             .param("id", order.id())
             .update();
@@ -339,6 +334,7 @@ public class ShopOrderService {
      * Captures payment for an approved order.
      * Transitions shop order to AWAITING_CONFIRMATION (NOT PAID!).
      * The order only becomes PAID when the verified webhook is processed.
+     * Idempotent if the order is already AWAITING_CONFIRMATION or PAID.
      */
     @Transactional
     public CaptureOrderResponseDto capturePayPalOrder(String shopOrderId) {
@@ -349,6 +345,24 @@ public class ShopOrderService {
             throw new ValidationException("Shop order " + shopOrderId + " has no linked PayPal order ID");
         }
 
+        // Idempotent guard: avoid calling PayPal /capture twice on refresh or React StrictMode double-mount
+        if (order.isPaid() || order.isAwaitingConfirmation()) {
+            String existingCaptureId = order.paypalCaptureId() != null
+                ? order.paypalCaptureId()
+                : findPaymentByOrderId(order.id()).map(PaymentRecord::paypalCaptureId).orElse("CAPTURED");
+            return new CaptureOrderResponseDto(
+                order.id(),
+                order.paypalOrderId(),
+                existingCaptureId,
+                order.status(),
+                order.totalMinor(),
+                order.currency(),
+                order.isPaid()
+                    ? "Order is already PAID."
+                    : "Capture already recorded on PayPal. Order is AWAITING_CONFIRMATION until webhook arrives."
+            );
+        }
+
         log.info("Capturing PayPal order {} for shopOrder {}", order.paypalOrderId(), order.id());
         PayPalOrder capturedOrder = payPalOrdersClient.captureOrder(order.paypalOrderId());
 
@@ -357,10 +371,15 @@ public class ShopOrderService {
         Instant now = clock.instant();
         jdbcClient.sql("""
             UPDATE shop_orders
-            SET status = 'AWAITING_CONFIRMATION', updated_at = :updatedAt
-            WHERE id = :id
+            SET status = 'AWAITING_CONFIRMATION',
+                buyer_approved_at = COALESCE(buyer_approved_at, :now),
+                captured_at = :now,
+                paypal_capture_id = :captureId,
+                updated_at = :now
+            WHERE id = :id AND status NOT IN ('PAID', 'REFUNDED')
             """)
-            .param("updatedAt", Timestamp.from(now))
+            .param("now", Timestamp.from(now))
+            .param("captureId", captureId)
             .param("id", order.id())
             .update();
 
@@ -453,10 +472,16 @@ public class ShopOrderService {
         if (targetOrderId != null) {
             int updated = jdbcClient.sql("""
                 UPDATE shop_orders
-                SET status = 'PAID', updated_at = :now
+                SET status = 'PAID',
+                    paid_at = COALESCE(paid_at, :now),
+                    buyer_approved_at = COALESCE(buyer_approved_at, :now),
+                    captured_at = COALESCE(captured_at, :now),
+                    paypal_capture_id = COALESCE(paypal_capture_id, :captureId),
+                    updated_at = :now
                 WHERE id = :id AND status != 'PAID'
                 """)
                 .param("now", Timestamp.from(now))
+                .param("captureId", captureId)
                 .param("id", targetOrderId)
                 .update();
 
@@ -488,13 +513,46 @@ public class ShopOrderService {
         Instant now = clock.instant();
         jdbcClient.sql("""
             UPDATE shop_orders
-            SET status = 'PAID', updated_at = :now
+            SET status = 'PAID',
+                paid_at = COALESCE(paid_at, :now),
+                updated_at = :now
             WHERE id = :id
             """)
             .param("now", Timestamp.from(now))
             .param("id", shopOrderId)
             .update();
         log.info("Marked shop order {} as PAID", shopOrderId);
+    }
+
+    /**
+     * Records buyer approval timestamp when a CHECKOUT.ORDER.APPROVED webhook arrives.
+     */
+    @Transactional
+    public void markBuyerApproved(String paypalOrderId, String shopOrderId, Instant approvedAt) {
+        Instant effectiveTime = approvedAt != null ? approvedAt : clock.instant();
+        if (shopOrderId != null && !shopOrderId.isBlank()) {
+            jdbcClient.sql("""
+                UPDATE shop_orders
+                SET buyer_approved_at = COALESCE(buyer_approved_at, :approvedAt),
+                    updated_at = :updatedAt
+                WHERE id = :id
+                """)
+                .param("approvedAt", Timestamp.from(effectiveTime))
+                .param("updatedAt", Timestamp.from(clock.instant()))
+                .param("id", shopOrderId)
+                .update();
+        } else if (paypalOrderId != null && !paypalOrderId.isBlank()) {
+            jdbcClient.sql("""
+                UPDATE shop_orders
+                SET buyer_approved_at = COALESCE(buyer_approved_at, :approvedAt),
+                    updated_at = :updatedAt
+                WHERE paypal_order_id = :paypalOrderId
+                """)
+                .param("approvedAt", Timestamp.from(effectiveTime))
+                .param("updatedAt", Timestamp.from(clock.instant()))
+                .param("paypalOrderId", paypalOrderId)
+                .update();
+        }
     }
 
     // =========================================================================
