@@ -12,6 +12,8 @@ import type {
 } from 'ag-grid-community';
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
+import { HeaderWithInfoTip } from '../components/grid/HeaderWithInfoTip';
 import { CopyableIdCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, ApiError, type ProposedActionDto, type AuditLogEntryDto } from '../lib/api';
 import { toast } from '../lib/toast';
@@ -251,6 +253,8 @@ export default function ActionsAuditPage() {
         headerName: 'Status',
         width: 155,
         filter: 'agTextColumnFilter',
+        headerComponent: HeaderWithInfoTip,
+        headerComponentParams: { metricId: 'actions.col.auditStatus' },
         cellRenderer: (params: ICellRendererParams<ActionRow>) => (
           <StatusPillCell status={params.value} />
         ),
@@ -408,6 +412,22 @@ export default function ActionsAuditPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left: Human-in-the-Loop Action Approval Queue */}
           <div className="lg:col-span-5 space-y-4">
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Proposed actions</h2>
+                <InfoTip
+                  metricId="actions.pendingCount"
+                  values={{
+                    value: actionsList.filter((a) => a.status === 'PROPOSED' || a.status === 'AWAITING_APPROVAL').length,
+                    customDetail: `${actionsList.filter((a) => a.status === 'PROPOSED' || a.status === 'AWAITING_APPROVAL').length} actions awaiting human approval`,
+                  }}
+                  size={15}
+                />
+              </div>
+              <span className="text-xs text-slate-500 font-mono">
+                {actionsList.filter((a) => a.status === 'PROPOSED' || a.status === 'AWAITING_APPROVAL').length} pending
+              </span>
+            </div>
             {actionsQuery.isLoading ? (
               <div className="space-y-4">
                 <CardSkeleton />

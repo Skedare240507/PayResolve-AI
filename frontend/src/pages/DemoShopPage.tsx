@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
 import { api, type ProductRecord, type DemoFaultSwitchesRecord } from '../lib/api';
 import { toast } from '../lib/toast';
 import { CardSkeleton } from '../components/DataStates';
@@ -282,7 +283,17 @@ export default function DemoShopPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-slate-500 dark:text-slate-400 block">Total</span>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Total</span>
+                    <InfoTip
+                      metricId="shop.orderTotal"
+                      values={{
+                        value: `$${totalAmountDollars}`,
+                        customDetail: `Calculated total: ${totalAmountMinor} cents ($${totalAmountDollars}) from cart items`,
+                      }}
+                      size={14}
+                    />
+                  </div>
                   <span className="text-xl font-bold text-slate-900 dark:text-white font-mono">
                     ${totalAmountDollars}
                   </span>
@@ -354,7 +365,10 @@ export default function DemoShopPage() {
             <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Fault switches</h2>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Fault switches</h2>
+                    <InfoTip metricId="shop.faultSwitches" size={14} />
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Causes real discrepancies on the next event.
                   </p>
