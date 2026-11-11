@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { PayResolveMark } from '../components/PayResolveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
 
 export default function LandingPage() {
   return (
@@ -310,8 +311,11 @@ export default function LandingPage() {
             {/* Right Numeric Metrics Grid */}
             <div className="lg:col-span-7 space-y-4">
               <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 dark:text-sky-400 font-mono tracking-tight">
-                  83.4%
+                <div className="flex items-center gap-2">
+                  <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 dark:text-sky-400 font-mono tracking-tight">
+                    83.4%
+                  </div>
+                  <InfoTip metricId="landing.friendlyFraudRate" size={16} />
                 </div>
                 <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
                   of enterprise merchants report friendly fraud rising over three years.
@@ -323,8 +327,11 @@ export default function LandingPage() {
               </div>
 
               <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tracking-tight">
-                  38%
+                <div className="flex items-center gap-2">
+                  <div className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tracking-tight">
+                    38%
+                  </div>
+                  <InfoTip metricId="landing.costInfluence" size={16} />
                 </div>
                 <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
                   of merchants say chargeback costs now influence what they charge.
@@ -336,8 +343,11 @@ export default function LandingPage() {
               </div>
 
               <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-4xl sm:text-5xl font-extrabold text-sky-600 dark:text-cyan-300 font-mono tracking-tight">
-                  58%
+                <div className="flex items-center gap-2">
+                  <div className="text-4xl sm:text-5xl font-extrabold text-sky-600 dark:text-cyan-300 font-mono tracking-tight">
+                    58%
+                  </div>
+                  <InfoTip metricId="landing.aiShoppingExposure" size={16} />
                 </div>
                 <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
                   of UK online merchants believe AI-initiated purchases already reach them.
@@ -349,8 +359,11 @@ export default function LandingPage() {
               </div>
 
               <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-blue-400 font-mono tracking-tight">
-                  281.3M
+                <div className="flex items-center gap-2">
+                  <div className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-blue-400 font-mono tracking-tight">
+                    281.3M
+                  </div>
+                  <InfoTip metricId="landing.globalDisputesVolume" size={16} />
                 </div>
                 <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
                   global chargebacks estimated for 2026, from Mastercard and Datos data.
