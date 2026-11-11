@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { PayResolveMark } from '../components/PayResolveLogo';
+import { PayResolveLogo } from '../components/PayResolveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { InfoTip } from '../components/InfoTip';
@@ -12,17 +12,9 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/90 dark:bg-midnight-950/80 border-b border-slate-200/80 dark:border-white/[0.07] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           
-          {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 dark:bg-gradient-to-tr dark:from-blue-600 dark:via-indigo-600 dark:to-sky-400 p-[1px] shadow-sm flex items-center justify-center text-white">
-              <PayResolveMark size={16} />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold tracking-tight text-slate-900 dark:text-white text-lg">PayResolve</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono tracking-wider font-semibold uppercase bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-sky-400 border border-blue-200 dark:border-blue-500/30">
-                AI
-              </span>
-            </div>
+          {/* Brand Logo — Auto-switches with active theme */}
+          <Link to="/" className="flex items-center gap-2.5 group" aria-label="PayResolve AI Home">
+            <PayResolveLogo height={32} />
           </Link>
 
           {/* Desktop Navigation Links */}
@@ -310,14 +302,14 @@ export default function LandingPage() {
 
             {/* Right Numeric Metrics Grid */}
             <div className="lg:col-span-7 space-y-4">
-              <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="text-4xl sm:text-5xl font-extrabold text-blue-600 dark:text-sky-400 font-mono tracking-tight">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 shrink-0 sm:w-32">
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-sky-400 font-mono tracking-tight">
                     83.4%
                   </div>
                   <InfoTip metricId="landing.friendlyFraudRate" size={16} />
                 </div>
-                <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
+                <div className="max-w-md text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                   of enterprise merchants report friendly fraud rising over three years.
                 </div>
                 <a className="inline-flex items-center gap-1 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition whitespace-nowrap font-medium" href="https://chargebacks911.com/2026-chargeback-field-report/" rel="noreferrer" target="_blank">
@@ -326,14 +318,14 @@ export default function LandingPage() {
                 </a>
               </div>
 
-              <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="text-4xl sm:text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tracking-tight">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 shrink-0 sm:w-32">
+                  <div className="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400 font-mono tracking-tight">
                     38%
                   </div>
                   <InfoTip metricId="landing.costInfluence" size={16} />
                 </div>
-                <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
+                <div className="max-w-md text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                   of merchants say chargeback costs now influence what they charge.
                 </div>
                 <a className="inline-flex items-center gap-1 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition whitespace-nowrap font-medium" href="https://greensheet.com/newswire&article_id=64300" rel="noreferrer" target="_blank">
@@ -342,14 +334,14 @@ export default function LandingPage() {
                 </a>
               </div>
 
-              <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="text-4xl sm:text-5xl font-extrabold text-sky-600 dark:text-cyan-300 font-mono tracking-tight">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 shrink-0 sm:w-32">
+                  <div className="text-2xl sm:text-3xl font-bold text-sky-600 dark:text-cyan-300 font-mono tracking-tight">
                     58%
                   </div>
                   <InfoTip metricId="landing.aiShoppingExposure" size={16} />
                 </div>
-                <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
+                <div className="max-w-md text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                   of UK online merchants believe AI-initiated purchases already reach them.
                 </div>
                 <a className="inline-flex items-center gap-1 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition whitespace-nowrap font-medium" href="https://www.retailgazette.co.uk/blog/2026/05/uk-retailers-warn-over-rising-ai-shopping-risks/" rel="noreferrer" target="_blank">
@@ -358,14 +350,14 @@ export default function LandingPage() {
                 </a>
               </div>
 
-              <div className="p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-blue-400 font-mono tracking-tight">
+              <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-midnight-900/60 border border-slate-200 dark:border-slate-800/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 shrink-0 sm:w-32">
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-blue-400 font-mono tracking-tight">
                     281.3M
                   </div>
                   <InfoTip metricId="landing.globalDisputesVolume" size={16} />
                 </div>
-                <div className="max-w-md text-sm text-slate-700 dark:text-slate-300">
+                <div className="max-w-md text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                   global chargebacks estimated for 2026, from Mastercard and Datos data.
                 </div>
                 <a className="inline-flex items-center gap-1 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-white transition whitespace-nowrap font-medium" href="https://www.chargeback.io/blog/chargeback-statistics" rel="noreferrer" target="_blank">
@@ -727,55 +719,126 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-950 dark:text-white tracking-tight">Sources and references</h2>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Every figure on this page comes from the articles below.</p>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Every figure on this page comes from the verified publications below.</p>
           </div>
-          <div className="space-y-3 font-mono text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            <div>
-              1. Chargebacks911, 2026 Chargeback Field Report, 30 Jun 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://chargebacks911.com/2026-chargeback-field-report/" rel="noreferrer" target="_blank">
-                https://chargebacks911.com/2026-chargeback-field-report/
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs sm:text-sm">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                1. Chargebacks911, 2026 Chargeback Field Report, 30 Jun 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://chargebacks911.com/2026-chargeback-field-report/"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: Chargebacks911 Field Report"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              2. The Green Sheet, Chargebacks are quietly raising prices, 28 Jul 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://greensheet.com/newswire&article_id=64300" rel="noreferrer" target="_blank">
-                https://greensheet.com/newswire&article_id=64300
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                2. The Green Sheet, Chargebacks are quietly raising prices, 28 Jul 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://greensheet.com/newswire&article_id=64300"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: The Green Sheet"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              3. eCommerceNews Asia, Friendly fraud drives up merchant costs, 2 Jul 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://ecommercenews.asia/story/friendly-fraud-drives-up-merchant-costs-report-finds" rel="noreferrer" target="_blank">
-                https://ecommercenews.asia/story/friendly-fraud-drives-up-merchant-costs-report-finds
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                3. eCommerceNews Asia, Friendly fraud drives up merchant costs, 2 Jul 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://ecommercenews.asia/story/friendly-fraud-drives-up-merchant-costs-report-finds"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: eCommerceNews Asia"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              4. Retail Gazette, UK retailers raise concerns over agentic AI shopping risks, May 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://www.retailgazette.co.uk/blog/2026/05/uk-retailers-warn-over-rising-ai-shopping-risks/" rel="noreferrer" target="_blank">
-                https://www.retailgazette.co.uk/blog/2026/05/uk-retailers-warn-over-rising-ai-shopping-risks/
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                4. Retail Gazette, UK retailers raise concerns over agentic AI shopping risks, May 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://www.retailgazette.co.uk/blog/2026/05/uk-retailers-warn-over-rising-ai-shopping-risks/"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: Retail Gazette"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              5. Forkast, The agentic commerce liability gap{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/" rel="noreferrer" target="_blank">
-                https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                5. Forkast, The agentic commerce liability gap
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://forkast.news/the-agentic-commerce-liability-gap-who-pays-when-the-agent-buys-wrong/"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: Forkast Article"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              6. The Paypers, Disputes and friendly fraud in the age of agentic commerce, 24 Jun 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://thepaypers.com/payments/expert-views/disputes-and-friendly-fraud-in-the-age-of-agentic-commerce" rel="noreferrer" target="_blank">
-                https://thepaypers.com/payments/expert-views/disputes-and-friendly-fraud-in-the-age-of-agentic-commerce
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                6. The Paypers, Disputes and friendly fraud in the age of agentic commerce, 24 Jun 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://thepaypers.com/payments/expert-views/disputes-and-friendly-fraud-in-the-age-of-agentic-commerce"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: The Paypers"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              7. Chargeflow, AI agent chargeback liability, 7 Jul 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://www.chargeflow.io/blog/ai-agent-chargeback-liability" rel="noreferrer" target="_blank">
-                https://www.chargeflow.io/blog/ai-agent-chargeback-liability
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                7. Chargeflow, AI agent chargeback liability, 7 Jul 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://www.chargeflow.io/blog/ai-agent-chargeback-liability"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: Chargeflow"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
-            <div>
-              8. Chargeback.io, Chargeback statistics 2026{' '}
-              <a className="text-blue-600 dark:text-blue-400 hover:underline ml-1 break-all" href="https://www.chargeback.io/blog/chargeback-statistics" rel="noreferrer" target="_blank">
-                https://www.chargeback.io/blog/chargeback-statistics
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-midnight-900/40 border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 group hover:border-blue-500/40 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
+                8. Chargeback.io, Chargeback statistics 2026
+              </span>
+              <a
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:border-blue-500/50 dark:hover:border-sky-500/50 transition-all shrink-0 cursor-pointer shadow-2xs"
+                href="https://www.chargeback.io/blog/chargeback-statistics"
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label="Open source: Chargeback.io Statistics"
+              >
+                <span className="text-sm font-semibold">↗</span>
               </a>
             </div>
           </div>
@@ -820,14 +883,10 @@ export default function LandingPage() {
             
             {/* Brand Summary */}
             <div className="col-span-2">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
-                  <PayResolveMark size={14} />
-                </div>
-                <span className="text-slate-900 dark:text-white font-bold text-base">PayResolve</span>
-                <span className="px-1 py-0.5 rounded text-[9px] font-mono bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-sky-400 border border-blue-200 dark:border-blue-500/30 uppercase font-semibold">
-                  AI
-                </span>
+              <div className="mb-3">
+                <Link to="/" aria-label="PayResolve AI Home">
+                  <PayResolveLogo height={28} />
+                </Link>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mb-4">
                 Investigate PayPal payment exceptions with evidence you can trust. AI proposes, humans approve.
