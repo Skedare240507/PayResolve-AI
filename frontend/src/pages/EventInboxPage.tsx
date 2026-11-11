@@ -11,6 +11,8 @@ import type {
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
+import { HeaderWithInfoTip } from '../components/grid/HeaderWithInfoTip';
 import { CopyableIdCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, fetchApi, type WebhookEventRecord } from '../lib/api';
 import { toast } from '../lib/toast';
@@ -184,8 +186,10 @@ export default function EventInboxPage() {
       {
         field: 'signature',
         headerName: 'Signature',
-        width: 130,
+        width: 140,
         filter: 'agTextColumnFilter',
+        headerComponent: HeaderWithInfoTip,
+        headerComponentParams: { metricId: 'events.col.signatureStatus' },
         cellRenderer: (params: ICellRendererParams<DisplayEvent>) => (
           <StatusPillCell status={params.value} />
         ),
@@ -202,8 +206,10 @@ export default function EventInboxPage() {
       {
         field: 'tries',
         headerName: 'Tries',
-        width: 95,
+        width: 105,
         filter: 'agNumberColumnFilter',
+        headerComponent: HeaderWithInfoTip,
+        headerComponentParams: { metricId: 'events.col.tries' },
         cellClass: 'font-mono text-xs text-center',
       },
       {
@@ -293,25 +299,37 @@ export default function EventInboxPage() {
         {/* 4 Stat Cards (real aggregates only) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Received</div>
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Received</span>
+              <InfoTip metricId="events.received" values={{ value: statsData?.received ?? 0 }} />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {statsData?.received ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Verified</div>
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Verified</span>
+              <InfoTip metricId="events.verified" values={{ value: statsData?.verified ?? 0 }} />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {statsData?.verified ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Processed</div>
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Processed</span>
+              <InfoTip metricId="events.processed" values={{ value: statsData?.processed ?? 0 }} />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {statsData?.processed ?? 0}
             </div>
           </div>
           <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Failed or duplicate</div>
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Failed or duplicate</span>
+              <InfoTip metricId="events.failedDuplicate" values={{ value: statsData?.failedOrDuplicate ?? 0 }} />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {statsData?.failedOrDuplicate ?? 0}
             </div>
