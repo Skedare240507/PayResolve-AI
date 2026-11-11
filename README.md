@@ -29,6 +29,7 @@ We did not run interviews or surveys for this project. The problem comes from Pa
 6. A small demo shop with fault switches lets you break things on purpose (fail the webhook handler, drop it, change the order total, deliver twice) so you can watch each case type appear.
 7. A benchmark page runs the detectors and investigator against seeded cases and records the results.
 8. An operations dashboard built with AG Studio summarises cases, events and benchmark data.
+9. Every chart, KPI, percentage, count, duration, and derived value has an interactive info tooltip (`<GoogleIcon name="info" />`) showing its exact formula, source table, time window, and underlying real numbers.
 
 ## What is real and what is not
 
