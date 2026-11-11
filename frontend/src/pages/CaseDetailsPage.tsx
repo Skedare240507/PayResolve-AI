@@ -519,7 +519,7 @@ export default function CaseDetailsPage() {
                   <div className="space-y-0.5">
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 block">Confirmed</span>
                     <p className="text-slate-700 dark:text-slate-300">
-                      {report.confirmed.join(' ')}
+                      {report.confirmed.map((item: any) => typeof item === 'string' ? item : item?.statement || item?.claim || item?.text || JSON.stringify(item)).join(' ')}
                     </p>
                   </div>
                 )}
@@ -528,7 +528,7 @@ export default function CaseDetailsPage() {
                   <div className="space-y-0.5">
                     <span className="font-semibold text-rose-600 dark:text-rose-400 block">Conflict</span>
                     <p className="text-slate-700 dark:text-slate-300">
-                      {report.conflicts.join(' ')}
+                      {report.conflicts.map((item: any) => typeof item === 'string' ? item : item?.statement || item?.claim || item?.text || JSON.stringify(item)).join(' ')}
                     </p>
                   </div>
                 )}
@@ -537,7 +537,7 @@ export default function CaseDetailsPage() {
                   <div className="space-y-0.5">
                     <span className="font-semibold text-amber-600 dark:text-amber-400 block">Missing</span>
                     <p className="text-slate-700 dark:text-slate-300">
-                      {report.missing.join(' ')}
+                      {report.missing.map((item: any) => typeof item === 'string' ? item : item?.statement || item?.claim || item?.text || JSON.stringify(item)).join(' ')}
                     </p>
                   </div>
                 )}
@@ -593,119 +593,109 @@ export default function CaseDetailsPage() {
           </div>
         </div>
 
-        {/* 2-Column Bottom: Timeline & Dispute Evidence Checklist */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Bottom Left: Timeline */}
-          <div className="lg:col-span-7 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">Timeline</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400 font-normal">
-                    <th className="py-2.5 pr-4 font-normal">Time</th>
-                    <th className="py-2.5 px-4 font-normal">Source</th>
-                    <th className="py-2.5 pl-4 font-normal">Event</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {timelineData && timelineData.length > 0 ? (
-                    timelineData.map((ev, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#121b2b]">
-                        <td className="py-3 pr-4 font-mono text-slate-600 dark:text-slate-400">
-                          {ev.formattedTime || (ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour12: false }) : '--:--')}
-                        </td>
-                        <td className="py-3 px-4 text-slate-700 dark:text-slate-300">
-                          {ev.source || ev.actor || 'SYSTEM'}
-                        </td>
-                        <td className="py-3 pl-4 text-slate-700 dark:text-slate-300">
-                          {ev.title || ev.description || ev.type || 'Event'}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-xs text-slate-400">
-                        No timeline events recorded yet. Run detectors or investigation to build the timeline.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {/* Bottom: Dispute Evidence Checklist & Multimodal Attachments (Timeline already available above in Evidence Graph panel) */}
+        <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-5 sm:p-7 space-y-6 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                  <GoogleIcon name="fact_check" size={18} />
+                </span>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                  Dispute evidence checklist
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Extracted via Gemini multimodal reasoning or verified merchant store records.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-xs font-mono px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                {attachments.length} attachment{attachments.length !== 1 ? 's' : ''}
+              </span>
             </div>
           </div>
 
-          {/* Bottom Right: Dispute Evidence Checklist & Multimodal Attachments */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-4 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">Dispute evidence checklist</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Extracted via Gemini multimodal or manual receipt upload.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                {attachments.length} file{attachments.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            <div className="space-y-4 pt-1">
-              <div className="flex items-center justify-between py-1">
-                <label className="flex items-center space-x-3 cursor-pointer">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Checklist Items Column */}
+            <div className="lg:col-span-6 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">
+                Required Evidence Fields
+              </h3>
+              
+              <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 flex items-center justify-between transition-colors">
+                <label className="flex items-center space-x-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={orderReceipt}
                     onChange={(e) => setOrderReceipt(e.target.checked)}
                     className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
                   />
-                  <span className="text-xs sm:text-sm text-slate-800 dark:text-slate-200">Order receipt</span>
+                  <div>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 block">Order receipt</span>
+                    <span className="text-[11px] text-slate-400">Merchant checkout cart and SKU snapshot</span>
+                  </div>
                 </label>
-                <span className="px-3 py-0.5 rounded-full border border-emerald-500/60 text-emerald-700 dark:text-emerald-400 text-xs">
+                <span className="px-3 py-0.5 rounded-full border border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
                   Have
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-1">
-                <label className="flex items-center space-x-3 cursor-pointer">
+              <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 flex items-center justify-between transition-colors">
+                <label className="flex items-center space-x-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={proofOfDelivery || attachments.some(a => Boolean(a.extractedData))}
                     onChange={(e) => setProofOfDelivery(e.target.checked)}
                     className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
                   />
-                  <span className="text-xs sm:text-sm text-slate-800 dark:text-slate-200">Proof of delivery</span>
+                  <div>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 block">Proof of delivery</span>
+                    <span className="text-[11px] text-slate-400">Carrier tracking or digital service fulfillment</span>
+                  </div>
                 </label>
-                <span className={`px-3 py-0.5 rounded-full border text-xs ${
+                <span className={`px-3 py-0.5 rounded-full border text-xs font-medium ${
                   proofOfDelivery || attachments.some(a => Boolean(a.extractedData))
-                    ? 'border-emerald-500/60 text-emerald-700 dark:text-emerald-400'
-                    : 'border-amber-600/60 text-amber-700 dark:text-amber-400'
+                    ? 'border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
+                    : 'border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400'
                 }`}>
                   {proofOfDelivery || attachments.some(a => Boolean(a.extractedData)) ? 'Verified' : 'Missing'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-1">
-                <label className="flex items-center space-x-3 cursor-pointer">
+              <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 flex items-center justify-between transition-colors">
+                <label className="flex items-center space-x-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={customerMessages}
                     onChange={(e) => setCustomerMessages(e.target.checked)}
                     className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
                   />
-                  <span className="text-xs sm:text-sm text-slate-800 dark:text-slate-200">Customer messages</span>
+                  <div>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 block">Customer messages</span>
+                    <span className="text-[11px] text-slate-400">Support chat logs and email notifications</span>
+                  </div>
                 </label>
-                <span className="px-3 py-0.5 rounded-full border border-amber-600/60 text-amber-700 dark:text-amber-400 text-xs">
+                <span className="px-3 py-0.5 rounded-full border border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs font-medium">
                   Missing
                 </span>
               </div>
             </div>
 
-            {/* Uploaded Evidence Attachments List */}
-            {attachments.length > 0 && (
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                <div className="text-xs font-semibold text-slate-900 dark:text-white">Uploaded evidence files</div>
-                <div className="space-y-2">
+            {/* Uploaded Evidence Files & Gemini Analysis Column */}
+            <div className="lg:col-span-6 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">
+                Multimodal Attachments ({attachments.length})
+              </h3>
+
+              {attachments.length === 0 ? (
+                <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400 space-y-1">
+                  <GoogleIcon name="cloud_upload" size={24} className="mx-auto text-slate-400" />
+                  <div>No receipt or invoice documents uploaded yet.</div>
+                  <div className="text-[11px] text-slate-500">Upload a PDF or image receipt above to trigger Gemini multimodal analysis.</div>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
                   {attachments.map((att) => {
                     let parsedData: any = null;
                     if (att.extractedData) {
@@ -716,10 +706,10 @@ export default function CaseDetailsPage() {
                     return (
                       <div
                         key={att.id}
-                        className="p-3 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-slate-200/60 dark:border-slate-800/80 text-xs space-y-1.5"
+                        className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-slate-200/60 dark:border-slate-800/80 text-xs space-y-2 shadow-2xs"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[280px]">
                             {att.filename}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
@@ -728,23 +718,26 @@ export default function CaseDetailsPage() {
                         </div>
 
                         {parsedData ? (
-                          <div className="text-[11px] text-slate-600 dark:text-slate-400 bg-emerald-50/40 dark:bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-200/50 dark:border-emerald-800/40 space-y-0.5">
+                          <div className="text-[11px] text-slate-600 dark:text-slate-400 bg-emerald-50/50 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 space-y-1">
                             <div className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center space-x-1">
                               <GoogleIcon name="verified" size={13} />
                               <span>Gemini Multimodal Extracted</span>
                             </div>
-                            <div>Merchant: {parsedData.merchant || 'N/A'}</div>
-                            <div>Amount: ${parsedData.amount ?? '--'} {parsedData.currency || 'USD'}</div>
-                            {parsedData.trackingNumber && <div>Tracking: {parsedData.trackingNumber}</div>}
-                            {parsedData.notes && <div className="italic text-slate-500">{parsedData.notes}</div>}
+                            <div className="grid grid-cols-2 gap-1 text-[11px] pt-0.5">
+                              <div><strong className="text-slate-700 dark:text-slate-300">Merchant:</strong> {parsedData.merchant || 'N/A'}</div>
+                              <div><strong className="text-slate-700 dark:text-slate-300">Amount:</strong> ${parsedData.amount ?? '--'} {parsedData.currency || 'USD'}</div>
+                            </div>
+                            {parsedData.trackingNumber && <div><strong className="text-slate-700 dark:text-slate-300">Tracking:</strong> {parsedData.trackingNumber}</div>}
+                            {parsedData.notes && <div className="italic text-slate-500 pt-0.5">{parsedData.notes}</div>}
                           </div>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => analyzeMutation.mutate(att.id)}
                             disabled={analyzeMutation.isPending}
-                            className="px-3 py-1 rounded bg-[#0066cc] hover:bg-blue-600 text-white text-[11px] font-medium shadow-2xs cursor-pointer flex items-center space-x-1 transition-colors"
+                            className="px-3.5 py-1.5 rounded-lg bg-[#0066cc] hover:bg-blue-600 text-white text-[11px] font-medium shadow-2xs cursor-pointer flex items-center space-x-1.5 transition-colors"
                           >
-                            <GoogleIcon name="auto_awesome" size={13} />
+                            <GoogleIcon name="auto_awesome" size={14} />
                             <span>{analyzeMutation.isPending ? 'Extracting...' : 'Analyze with Gemini'}</span>
                           </button>
                         )}
@@ -752,10 +745,9 @@ export default function CaseDetailsPage() {
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-
         </div>
       </div>
     </AppLayout>

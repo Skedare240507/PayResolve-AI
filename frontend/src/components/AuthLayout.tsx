@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { PayResolveMark } from './PayResolveLogo';
+import { PayResolveLogo } from './PayResolveLogo';
 import { ThemeToggle } from './ThemeToggle';
 
 interface AuthLayoutProps {
@@ -17,15 +17,10 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         <div className="z-10 flex items-center justify-between">
           <Link 
             to="/" 
-            className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white shadow-sm cursor-pointer backdrop-blur-xs transition-colors"
+            className="inline-flex items-center px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white shadow-sm cursor-pointer backdrop-blur-xs transition-colors"
+            aria-label="PayResolve AI Home"
           >
-            <PayResolveMark size={22} />
-            <span className="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
-              PayResolve
-              <span className="text-[10px] bg-blue-500/80 px-1 py-0.5 rounded text-white font-mono leading-none">
-                AI
-              </span>
-            </span>
+            <PayResolveLogo height={26} />
           </Link>
         </div>
 
