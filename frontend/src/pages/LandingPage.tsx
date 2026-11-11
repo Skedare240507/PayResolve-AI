@@ -883,14 +883,6 @@ export default function LandingPage() {
                 <span>Sandbox only. No real money.</span>
               </div>
             </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mb-4">
-                Investigate PayPal payment exceptions with evidence you can trust. AI proposes, humans approve.
-              </p>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Sandbox only. No real money.</span>
-              </div>
-            </div>
 
             {/* Links Column 1: Product */}
             <div>
