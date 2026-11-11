@@ -13,6 +13,8 @@ import type {
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
+import { HeaderWithInfoTip } from '../components/grid/HeaderWithInfoTip';
 import { CountUp } from '../components/CountUp';
 import { CopyableIdCell, SeverityPillCell, StatusPillCell } from '../components/grid/GridCellRenderers';
 import { api, type CaseRecord } from '../lib/api';
@@ -224,8 +226,10 @@ export default function ExceptionQueuePage() {
     {
       field: 'amountMinor',
       headerName: 'Amount',
-      width: 115,
+      width: 125,
       filter: 'agNumberColumnFilter',
+      headerComponent: HeaderWithInfoTip,
+      headerComponentParams: { metricId: 'queue.col.amount' },
       cellClass: 'font-mono font-medium',
       valueFormatter: (params: ValueFormatterParams<GridCaseRow, number>) =>
         formatMinor(params.value ?? undefined),
@@ -235,17 +239,21 @@ export default function ExceptionQueuePage() {
     {
       field: 'severity',
       headerName: 'Severity',
-      width: 125,
+      width: 135,
       filter: 'agTextColumnFilter',
+      headerComponent: HeaderWithInfoTip,
+      headerComponentParams: { metricId: 'queue.col.severity' },
       cellRenderer: (params: ICellRendererParams<GridCaseRow>) => (
         <SeverityPillCell severity={params.value} />
       ),
     },
     {
       field: 'openedAtDate',
-      headerName: 'Detected',
+      headerName: 'Age',
       width: 145,
       filter: 'agDateColumnFilter',
+      headerComponent: HeaderWithInfoTip,
+      headerComponentParams: { metricId: 'queue.col.age' },
       cellClass: 'text-slate-500 dark:text-slate-400 text-xs font-mono',
       valueFormatter: (params: ValueFormatterParams<GridCaseRow, Date>) => {
         if (!params.value) return '';
@@ -345,7 +353,10 @@ export default function ExceptionQueuePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-                <span>Open cases</span>
+                <span className="flex items-center gap-1.5">
+                  Open cases
+                  <InfoTip metricId="queue.openCases" size={14} />
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
               </div>
               <div className="flex items-baseline gap-2">
@@ -357,7 +368,10 @@ export default function ExceptionQueuePage() {
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-                <span>Awaiting approval</span>
+                <span className="flex items-center gap-1.5">
+                  Awaiting approval
+                  <InfoTip metricId="queue.awaitingApproval" size={14} />
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
               </div>
               <div className="flex items-baseline gap-2">
@@ -369,7 +383,10 @@ export default function ExceptionQueuePage() {
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-                <span>Duplicates blocked</span>
+                <span className="flex items-center gap-1.5">
+                  Duplicates blocked
+                  <InfoTip metricId="queue.duplicatesBlocked" size={14} />
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </div>
               <div className="flex items-baseline gap-2">
@@ -381,7 +398,10 @@ export default function ExceptionQueuePage() {
             </div>
             <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
-                <span>Oldest open case</span>
+                <span className="flex items-center gap-1.5">
+                  Oldest open case
+                  <InfoTip metricId="queue.oldestOpenCase" size={14} />
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               </div>
               <div className="flex items-baseline justify-between">
