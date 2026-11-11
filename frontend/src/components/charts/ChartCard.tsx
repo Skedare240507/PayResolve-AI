@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { GoogleIcon } from '../GoogleIcon';
+import { InfoTip, type MetricValues } from '../InfoTip';
+import type { MetricId } from '../../lib/metricDefinitions';
 
 export interface AccessibleTableColumn {
   key: string;
@@ -9,6 +11,8 @@ export interface AccessibleTableColumn {
 export interface ChartCardProps {
   title: string;
   description: string;
+  metricId?: MetricId;
+  metricValues?: MetricValues;
   isLoading?: boolean;
   isError?: boolean;
   errorMessage?: string;
@@ -35,6 +39,8 @@ function formatUpdatedTime(iso?: string | null): string {
 export function ChartCard({
   title,
   description,
+  metricId,
+  metricValues,
   isLoading = false,
   isError = false,
   errorMessage = 'Failed to load chart telemetry.',
@@ -52,10 +58,13 @@ export function ChartCard({
       className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e1522] p-5 shadow-xs flex flex-col justify-between transition-colors"
     >
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-            {title}
-          </h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {title}
+            </h3>
+            {metricId && <InfoTip metricId={metricId} values={metricValues} size={16} />}
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
             {description}
           </p>

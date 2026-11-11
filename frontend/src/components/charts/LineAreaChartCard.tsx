@@ -3,6 +3,8 @@ import { AgCharts } from 'ag-charts-react';
 import type { AgAreaSeriesOptions, AgChartOptions, AgLineSeriesOptions } from 'ag-charts-community';
 import { PAYRESOLVE_CHART_PALETTE, useChartTheme } from '../../lib/chartTheme';
 import { ChartCard, type AccessibleTableColumn } from './ChartCard';
+import type { MetricId } from '../../lib/metricDefinitions';
+import type { MetricValues } from '../InfoTip';
 
 export interface LineSeriesSpec {
   yKey: string;
@@ -17,6 +19,8 @@ export interface LineSeriesSpec {
 export interface LineAreaChartCardProps {
   title: string;
   description: string;
+  metricId?: MetricId;
+  metricValues?: MetricValues;
   data: Array<Record<string, string | number>>;
   xKey: string;
   xLabel?: string;
@@ -33,6 +37,8 @@ export interface LineAreaChartCardProps {
 export function LineAreaChartCard({
   title,
   description,
+  metricId,
+  metricValues,
   data,
   xKey,
   xLabel = 'Time',
@@ -110,6 +116,8 @@ export function LineAreaChartCard({
     <ChartCard
       title={title}
       description={description}
+      metricId={metricId}
+      metricValues={metricValues}
       isLoading={isLoading}
       isError={isError}
       errorMessage={errorMessage}

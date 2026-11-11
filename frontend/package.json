@@ -8,9 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "codegen": "openapi-typescript src/types/openapi.json -o src/types/api.ts"
+    "codegen": "openapi-typescript src/types/openapi.json -o src/types/api.ts",
+    "check:metrics": "node ../scripts/check-metrics.mjs",
+    "docs:metrics": "node ../scripts/generate-docs-metrics.mjs"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.20",
     "@tanstack/react-query": "^5.107.1",
     "@types/dagre": "^0.7.54",
     "@xyflow/react": "^12.12.1",

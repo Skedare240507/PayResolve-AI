@@ -5,6 +5,7 @@ import { AgStudioLicenseManager, studioTheme } from 'ag-studio';
 
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
 import { api } from '../lib/api';
 import { useTheme } from '../lib/theme';
 import { SEMANTIC_COLORS } from '../lib/chartTheme';
@@ -271,7 +272,13 @@ export default function OperationsPage() {
           return (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
               <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Total Exceptions</div>
+                <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                  <span>Total Exceptions</span>
+                  <InfoTip
+                    metricId="ops.totalExceptions"
+                    values={{ value: totalCasesCount, customDetail: `Total active case rows: ${totalCasesCount}` }}
+                  />
+                </div>
                 <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
                   {totalCasesCount}
                 </div>
@@ -281,7 +288,17 @@ export default function OperationsPage() {
               </div>
 
               <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Investigation Latency</div>
+                <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                  <span>Investigation Latency</span>
+                  <InfoTip
+                    metricId="ops.investigationLatency"
+                    values={{
+                      value: medianLatency != null ? `${medianLatency.toFixed(1)} s` : null,
+                      n: benchSample,
+                      customDetail: medianLatency != null ? `Median AI duration: ${medianLatency.toFixed(1)}s (benchmark sample size n = ${benchSample ?? 18})` : null,
+                    }}
+                  />
+                </div>
                 <div className="text-3xl sm:text-4xl font-bold text-emerald-600 dark:text-emerald-400">
                   {medianLatency != null ? `${medianLatency.toFixed(1)} s` : '—'}
                 </div>
@@ -290,11 +307,17 @@ export default function OperationsPage() {
                 </div>
               </div>
 
-              <div
-                className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
-                title="AI Grounding Formula: (Verified cited entity IDs / Total cited entity IDs) * 100"
-              >
-                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">AI Grounding Rate</div>
+              <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                  <span>AI Grounding Rate</span>
+                  <InfoTip
+                    metricId="ops.groundingRate"
+                    values={{
+                      value: groundingPct != null ? `${groundingPct.toFixed(1)}%` : null,
+                      customDetail: groundingPct != null ? `Grounding: ${groundingPct.toFixed(1)}% citations verified against graph` : null,
+                    }}
+                  />
+                </div>
                 <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
                   {groundingPct != null ? `${groundingPct.toFixed(1)}%` : '—'}
                 </div>
@@ -303,11 +326,19 @@ export default function OperationsPage() {
                 </div>
               </div>
 
-              <div
-                className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2 cursor-help"
-                title="Evidence Integrity Formula: (Confirmed evidence links / Total expected evidence links) * 100"
-              >
-                <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Evidence Integrity</div>
+              <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+                  <span>Evidence Integrity</span>
+                  <InfoTip
+                    metricId="ops.evidenceIntegrity"
+                    values={{
+                      value: integrityPct != null ? `${integrityPct}%` : null,
+                      numerator: totalConfirmed,
+                      denominator: totalNodes,
+                      customDetail: totalNodes > 0 ? `Confirmed nodes: ${totalConfirmed} / Total expected: ${totalNodes} = ${integrityPct}%` : null,
+                    }}
+                  />
+                </div>
                 <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
                   {integrityPct != null ? `${integrityPct}%` : '—'}
                 </div>
@@ -340,6 +371,7 @@ export default function OperationsPage() {
             <BarChartCard
               title="Cases by Exception Type"
               description="Distribution across PayPal reconciliation detector categories."
+              metricId="ops.chart.casesByType"
               data={(statsData?.casesByType || []).map((c) => ({
                 label: c.typeLabel || c.type || 'Unknown',
                 count: c.count ?? 0,
@@ -374,6 +406,7 @@ export default function OperationsPage() {
                 <DonutChartCard
                   title="Severity Mix"
                   description="Active discrepancies segmented by risk level."
+                  metricId="ops.chart.severityMix"
                   data={severityRows}
                   angleKey="count"
                   calloutLabelKey="severity"
@@ -394,6 +427,7 @@ export default function OperationsPage() {
                   ? `Measured median comparison from benchmark run (n=${statsData.benchmarkComparison.sampleSize}).`
                   : 'Run benchmark to measure rule-only vs AI investigator latency.'
               }
+              metricId="ops.chart.latencyComparison"
               data={
                 statsData?.benchmarkComparison
                   ? [
@@ -424,6 +458,7 @@ export default function OperationsPage() {
             <BarChartCard
               title="Evidence Coverage by Case Type"
               description="Confirmed PayPal/shop nodes versus dashed missing invariant links."
+              metricId="ops.chart.evidenceCoverage"
               data={(statsData?.evidenceCoverageByType || []).map((cov) => ({
                 category: cov.typeLabel || cov.type || 'Unknown',
                 confirmed: cov.confirmedNodes ?? 0,
@@ -448,6 +483,7 @@ export default function OperationsPage() {
               <LineAreaChartCard
                 title="Webhook Events Received per Hour"
                 description="Verified deliveries vs deduplicated replay attempts grouped by UTC hour."
+                metricId="ops.chart.webhookActivity"
                 data={(statsData?.webhooksByHour || []).map((w) => ({
                   hour: w.hourLabel || w.hourIso || 'Unknown',
                   totalReceived: w.totalReceived ?? 0,
@@ -502,6 +538,7 @@ export default function OperationsPage() {
                   <span>Sources: cases, events, benchmark</span>
                   <span>•</span>
                   <span>3 Custom widgets active</span>
+                  <InfoTip metricId="ops.studio.casesByType" size={15} />
                 </div>
               </div>
 

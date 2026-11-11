@@ -3,6 +3,8 @@ import { AgCharts } from 'ag-charts-react';
 import type { AgBarSeriesOptions, AgChartOptions } from 'ag-charts-community';
 import { PAYRESOLVE_CHART_PALETTE, useChartTheme } from '../../lib/chartTheme';
 import { ChartCard, type AccessibleTableColumn } from './ChartCard';
+import type { MetricId } from '../../lib/metricDefinitions';
+import type { MetricValues } from '../InfoTip';
 
 export interface BarSeriesSpec {
   yKey: string;
@@ -14,6 +16,8 @@ export interface BarSeriesSpec {
 export interface BarChartCardProps {
   title: string;
   description: string;
+  metricId?: MetricId;
+  metricValues?: MetricValues;
   data: Array<Record<string, string | number>>;
   xKey: string;
   xLabel?: string;
@@ -33,6 +37,8 @@ export interface BarChartCardProps {
 export function BarChartCard({
   title,
   description,
+  metricId,
+  metricValues,
   data,
   xKey,
   xLabel = 'Category',
@@ -106,6 +112,8 @@ export function BarChartCard({
     <ChartCard
       title={title}
       description={description}
+      metricId={metricId}
+      metricValues={metricValues}
       isLoading={isLoading}
       isError={isError}
       errorMessage={errorMessage}

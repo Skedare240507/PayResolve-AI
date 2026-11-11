@@ -3,10 +3,14 @@ import { AgCharts } from 'ag-charts-react';
 import type { AgChartOptions } from 'ag-charts-community';
 import { PAYRESOLVE_CHART_PALETTE, useChartTheme } from '../../lib/chartTheme';
 import { ChartCard, type AccessibleTableColumn } from './ChartCard';
+import type { MetricId } from '../../lib/metricDefinitions';
+import type { MetricValues } from '../InfoTip';
 
 export interface DonutChartCardProps {
   title: string;
   description: string;
+  metricId?: MetricId;
+  metricValues?: MetricValues;
   data: Array<Record<string, string | number>>;
   angleKey: string;
   calloutLabelKey: string;
@@ -22,6 +26,8 @@ export interface DonutChartCardProps {
 export function DonutChartCard({
   title,
   description,
+  metricId,
+  metricValues,
   data,
   angleKey,
   calloutLabelKey,
@@ -94,6 +100,8 @@ export function DonutChartCard({
     <ChartCard
       title={title}
       description={description}
+      metricId={metricId}
+      metricValues={metricValues}
       isLoading={isLoading}
       isError={isError}
       errorMessage={errorMessage}
