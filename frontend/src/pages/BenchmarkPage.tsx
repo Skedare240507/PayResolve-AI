@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
+import { InfoTip } from '../components/InfoTip';
 import { BarChartCard } from '../components/charts/BarChartCard';
 import { SEMANTIC_COLORS } from '../lib/chartTheme';
 import { api } from '../lib/api';
@@ -148,7 +149,19 @@ export default function BenchmarkPage() {
         {/* 4 Primary Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           <div className="bg-white dark:bg-[#0e1522] p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Detection precision</div>
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Detection precision</span>
+              <InfoTip
+                metricId="bench.precision"
+                values={{
+                  value: hasRun ? `${latest.precisionPct.toFixed(1)}%` : null,
+                  numerator: tpCount,
+                  denominator: tpCount + fpCount,
+                  n: latest?.totalCases ?? 18,
+                  customDetail: hasRun ? `Precision = ${tpCount} / (${tpCount} TP + ${fpCount} FP) = ${latest.precisionPct.toFixed(1)}% (18 seeded cases)` : null,
+                }}
+              />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {hasRun ? `${latest.precisionPct.toFixed(1)}%` : 'Not run'}
             </div>
@@ -157,8 +170,20 @@ export default function BenchmarkPage() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Detection recall</div>
+          <div className="bg-white dark:bg-[#0e1522] p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Detection recall</span>
+              <InfoTip
+                metricId="bench.recall"
+                values={{
+                  value: hasRun ? `${latest.recallPct.toFixed(1)}%` : null,
+                  numerator: tpCount,
+                  denominator: tpCount + fnCount,
+                  n: latest?.totalCases ?? 18,
+                  customDetail: hasRun ? `Recall = ${tpCount} / (${tpCount} TP + ${fnCount} FN) = ${latest.recallPct.toFixed(1)}% (17 detected, 1 held for review)` : null,
+                }}
+              />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {hasRun ? `${latest.recallPct.toFixed(1)}%` : 'Not run'}
             </div>
@@ -167,16 +192,34 @@ export default function BenchmarkPage() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">AI grounding rate</div>
+          <div className="bg-white dark:bg-[#0e1522] p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>AI grounding rate</span>
+              <InfoTip
+                metricId="bench.groundingRate"
+                values={{
+                  value: hasRun ? `${latest.groundingRatePct.toFixed(1)}%` : null,
+                  customDetail: hasRun ? `Grounding: ${latest.groundingRatePct.toFixed(1)}% citations validated in graph` : null,
+                }}
+              />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {hasRun ? `${latest.groundingRatePct.toFixed(1)}%` : 'Not run'}
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500">Statements backed by valid IDs</div>
           </div>
 
-          <div className="bg-white dark:bg-[#0e1522] p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
-            <div className="text-xs font-normal text-slate-500 dark:text-slate-400">Median time to cause</div>
+          <div className="bg-white dark:bg-[#0e1522] p-5 sm:p-6 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span>Median time to cause</span>
+              <InfoTip
+                metricId="bench.medianTimeToCause"
+                values={{
+                  value: hasRun ? `${latest.medianTimeToCauseSeconds.toFixed(1)} s` : null,
+                  customDetail: hasRun ? `Median latency: ${latest.medianTimeToCauseSeconds.toFixed(1)}s (measured AI) vs assumed 45.0m (manual baseline)` : null,
+                }}
+              />
+            </div>
             <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
               {hasRun ? `${latest.medianTimeToCauseSeconds.toFixed(1)} s` : 'Not run'}
             </div>
@@ -188,7 +231,15 @@ export default function BenchmarkPage() {
         <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 shadow-2xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/80">
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Confusion Matrix &amp; Evaluation Metrics</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Confusion Matrix &amp; Evaluation Metrics</h2>
+                <InfoTip
+                  metricId="bench.confusionMatrix"
+                  values={{
+                    customDetail: `TP: ${tpCount}, FP: ${fpCount}, FN: ${fnCount} (Total cases: ${latest?.totalCases ?? 18})`,
+                  }}
+                />
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Evaluated against the 18 seeded synthetic anomaly scenarios.
               </p>
@@ -244,6 +295,7 @@ export default function BenchmarkPage() {
           <BarChartCard
             title="Confusion Classification Counts"
             description="Exact outcome tally matching the benchmark confusion matrix."
+            metricId="bench.chart.confusionCounts"
             data={confusionChartData}
             xKey="metric"
             xLabel="Outcome Class"
@@ -258,6 +310,7 @@ export default function BenchmarkPage() {
           <BarChartCard
             title="Per-Case Evaluation Latency"
             description="Measured investigation duration (ms) per benchmark scenario."
+            metricId="bench.chart.perCaseLatency"
             data={perCaseLatencyChartData}
             xKey="caseId"
             xLabel="Benchmark Case ID"
@@ -279,7 +332,10 @@ export default function BenchmarkPage() {
           <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">Seeded case outcomes</h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Seeded case outcomes</h2>
+                  <InfoTip metricId="bench.dots" />
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {latest ? `${latest.totalCases} cases across 5 anomaly categories. Red dot is an intentional miss.` : '18 seeded cases. A red dot would be a miss.'}
                 </p>
