@@ -211,9 +211,19 @@ jobs:
             exit 1
           fi
 
+          echo "Authenticating operator session for CI seeding..."
+          CSRF_TOKEN=$(curl -sf -c /tmp/ci-cookies.txt http://127.0.0.1:8080/api/auth/csrf | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(d.token)")
+          curl -sf -b /tmp/ci-cookies.txt -c /tmp/ci-cookies.txt \
+            -H "Content-Type: application/json" \
+            -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+            -d '{"username":"operator","password":"operator123"}' \
+            http://127.0.0.1:8080/api/auth/login > /dev/null
+          CSRF_TOKEN=$(curl -sf -b /tmp/ci-cookies.txt -c /tmp/ci-cookies.txt http://127.0.0.1:8080/api/auth/csrf | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(d.token)")
+
           echo "Seeding canonical demo cases and running initial benchmark for offline API tests..."
-          curl -s -X POST http://127.0.0.1:8080/api/cases/seed
-          curl -s -X POST http://127.0.0.1:8080/api/benchmark/run
+          curl -sf -b /tmp/ci-cookies.txt -H "X-XSRF-TOKEN: $CSRF_TOKEN" -X POST http://127.0.0.1:8080/api/cases/seed
+          curl -sf -b /tmp/ci-cookies.txt -H "X-XSRF-TOKEN: $CSRF_TOKEN" -X POST http://127.0.0.1:8080/api/benchmark/run
+          rm -f /tmp/ci-cookies.txt
 
           echo "Running Newman offline suite..."
           npx --yes newman run postman/PayResolve.postman_collection.json \

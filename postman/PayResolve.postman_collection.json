@@ -291,6 +291,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
                   }
                 ],
                 "body": {
@@ -1200,6 +1204,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
                   }
                 ],
                 "body": {
@@ -1384,7 +1392,13 @@
                     "logout"
                   ]
                 },
-                "description": "Invalidates active HTTP session and clears security context."
+                "description": "Invalidates active HTTP session and clears security context.",
+                "header": [
+                  {
+                    "key": "X-XSRF-TOKEN",
+                    "value": "{{csrfToken}}"
+                  }
+                ]
               }
             }
           ]
