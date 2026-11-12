@@ -42,6 +42,38 @@ export interface DisplayEvent {
   raw: WebhookEventRecord;
 }
 
+function sanitizePayloadForDisplay(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    const mask = (obj: unknown): unknown => {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(mask);
+      const res: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+        const lower = k.toLowerCase();
+        if (
+          lower.includes('secret') ||
+          lower.includes('password') ||
+          lower.includes('auth') ||
+          lower.includes('token') ||
+          lower.includes('cookie') ||
+          lower.includes('credential')
+        ) {
+          res[k] = '[REDACTED]';
+        } else if (typeof v === 'object') {
+          res[k] = mask(v);
+        } else {
+          res[k] = v;
+        }
+      }
+      return res;
+    };
+    return JSON.stringify(mask(parsed), null, 2);
+  } catch {
+    return raw.replace(/(secret|password|token|auth)=[^&\s]+/gi, '$1=[REDACTED]');
+  }
+}
+
 export default function EventInboxPage() {
   const queryClient = useQueryClient();
   const { gridTheme } = useGridTheme();
@@ -478,17 +510,14 @@ export default function EventInboxPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Raw JSON payload
+                      Raw JSON payload (safe sanitized view)
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        let formatted = selectedEvent.rawPayload;
-                        try {
-                          formatted = JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
-                        } catch {}
+                        const formatted = sanitizePayloadForDisplay(selectedEvent.rawPayload);
                         navigator.clipboard.writeText(formatted);
-                        toast.info('Raw JSON payload copied to clipboard');
+                        toast.info('Sanitized JSON payload copied to clipboard');
                       }}
                       className="flex items-center space-x-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                     >
@@ -498,13 +527,7 @@ export default function EventInboxPage() {
                   </div>
                   <div className="p-3 bg-slate-950 text-slate-300 font-mono text-xs rounded-xl overflow-x-auto max-h-64 border border-slate-800">
                     <pre className="whitespace-pre">
-                      {(() => {
-                        try {
-                          return JSON.stringify(JSON.parse(selectedEvent.rawPayload), null, 2);
-                        } catch {
-                          return selectedEvent.rawPayload;
-                        }
-                      })()}
+                      {sanitizePayloadForDisplay(selectedEvent.rawPayload)}
                     </pre>
                   </div>
                 </div>

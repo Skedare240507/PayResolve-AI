@@ -43,6 +43,28 @@ public final class SensitiveDataMasker {
         Pattern.CASE_INSENSITIVE
     );
 
+    // Mask Bearer tokens in Authorization headers / logs
+    private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile(
+        "(Bearer\\s+)[A-Za-z0-9_\\-\\.]+",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    // Mask Groq API keys (e.g. gsk_...)
+    private static final Pattern GROQ_API_KEY_PATTERN = Pattern.compile(
+        "gsk_[a-zA-Z0-9]{20,}"
+    );
+
+    // Mask Google Gemini API keys (e.g. AIza...)
+    private static final Pattern GEMINI_API_KEY_PATTERN = Pattern.compile(
+        "AIza[0-9A-Za-z-_]{35}"
+    );
+
+    // Mask sensitive parameter assignments (password=..., secret=..., etc.)
+    private static final Pattern SENSITIVE_PARAM_PATTERN = Pattern.compile(
+        "((?:password|secret|client_secret|apiKey|api_key|access_token|refresh_token)\\s*[=:]\\s*[\"']?)[^\"'\\s,;]+",
+        Pattern.CASE_INSENSITIVE
+    );
+
     static {
         registerFromEnv("DATABASE_URL");
         registerFromEnv("DB_USER");
@@ -50,6 +72,12 @@ public final class SensitiveDataMasker {
         registerFromEnv("spring.datasource.url");
         registerFromEnv("spring.datasource.username");
         registerFromEnv("spring.datasource.password");
+        registerFromEnv("PAYPAL_CLIENT_SECRET");
+        registerFromEnv("GROQ_API_KEY");
+        registerFromEnv("GEMINI_API_KEY");
+        registerFromEnv("OPERATOR_PASSWORD");
+        registerFromEnv("VIEWER_PASSWORD");
+        registerFromEnv("DEMO_BUYER_PASSWORD");
     }
 
     private SensitiveDataMasker() {}
@@ -120,6 +148,16 @@ public final class SensitiveDataMasker {
 
         // 5. Mask PostgreSQL user authentication error messages
         masked = POSTGRES_USER_PATTERN.matcher(masked).replaceAll("$1[MASKED_USER]$2");
+
+        // 6. Mask bearer tokens
+        masked = BEARER_TOKEN_PATTERN.matcher(masked).replaceAll("$1[MASKED_TOKEN]");
+
+        // 7. Mask provider API keys
+        masked = GROQ_API_KEY_PATTERN.matcher(masked).replaceAll("[MASKED_API_KEY]");
+        masked = GEMINI_API_KEY_PATTERN.matcher(masked).replaceAll("[MASKED_API_KEY]");
+
+        // 8. Mask sensitive parameter assignments
+        masked = SENSITIVE_PARAM_PATTERN.matcher(masked).replaceAll("$1[MASKED]");
 
         return masked;
     }

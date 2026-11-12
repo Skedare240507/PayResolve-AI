@@ -71,6 +71,43 @@ class DatasourceMaskingTest {
     }
 
     @Test
+    @DisplayName("Should mask Bearer tokens in Authorization headers / logs")
+    void shouldMaskBearerTokens() {
+        String logLine = "Outbound request with Authorization: Bearer A21AAL_mockSecretTokenValue99887766554433";
+        String masked = SensitiveDataMasker.mask(logLine);
+
+        assertThat(masked)
+            .doesNotContain("A21AAL_mockSecretTokenValue99887766554433")
+            .contains("Authorization: Bearer [MASKED_TOKEN]");
+    }
+
+    @Test
+    @DisplayName("Should mask Groq and Gemini API keys")
+    void shouldMaskProviderApiKeys() {
+        String groqLog = "Using Groq key gsk_abcdef1234567890abcdef1234567890 for chat request";
+        String geminiLog = "Using Gemini key AIzaSyD12345678901234567890123456789012 for document analysis";
+
+        assertThat(SensitiveDataMasker.mask(groqLog))
+            .doesNotContain("gsk_abcdef1234567890abcdef1234567890")
+            .contains("[MASKED_API_KEY]");
+
+        assertThat(SensitiveDataMasker.mask(geminiLog))
+            .doesNotContain("AIzaSyD12345678901234567890123456789012")
+            .contains("[MASKED_API_KEY]");
+    }
+
+    @Test
+    @DisplayName("Should mask parameter assignments like password=, secret=, client_secret=")
+    void shouldMaskSensitiveParamAssignments() {
+        String logLine = "PayPal request params: client_id=sandbox_user&client_secret=super_secret_client_val_123&grant_type=client_credentials";
+        String masked = SensitiveDataMasker.mask(logLine);
+
+        assertThat(masked)
+            .doesNotContain("super_secret_client_val_123")
+            .contains("client_secret=[MASKED]");
+    }
+
+    @Test
     @DisplayName("Should handle null and empty strings safely")
     void shouldHandleNullAndEmpty() {
         assertThat(SensitiveDataMasker.mask(null)).isNull();
