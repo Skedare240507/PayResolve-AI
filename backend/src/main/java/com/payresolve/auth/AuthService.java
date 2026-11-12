@@ -21,13 +21,18 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Service managing user authentication, role-based security, BCrypt credential hashing,
@@ -37,6 +42,8 @@ import java.util.UUID;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    public static final String GENERIC_RESET_MESSAGE = "If that account exists, ask the administrator to reset it.";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository resetTokenRepository;
@@ -44,6 +51,7 @@ public class AuthService {
     private final AuthProperties authProperties;
     private final PasswordEncoder passwordEncoder;
     private final LoginAttemptService loginAttemptService;
+    private final ActiveSessionRegistry activeSessionRegistry;
     private final Clock clock;
     private final String dummyPasswordHash;
 
@@ -54,6 +62,7 @@ public class AuthService {
         AuthProperties authProperties,
         PasswordEncoder passwordEncoder,
         LoginAttemptService loginAttemptService,
+        ActiveSessionRegistry activeSessionRegistry,
         Clock clock
     ) {
         this.userRepository = userRepository;
@@ -62,6 +71,7 @@ public class AuthService {
         this.authProperties = authProperties;
         this.passwordEncoder = passwordEncoder;
         this.loginAttemptService = loginAttemptService;
+        this.activeSessionRegistry = activeSessionRegistry;
         this.clock = clock;
         this.dummyPasswordHash = passwordEncoder.encode("payresolve-dummy-timing-guard");
     }
@@ -188,6 +198,7 @@ public class AuthService {
 
         HttpSession session = request.getSession(true);
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        activeSessionRegistry.registerSession(user.username(), session);
 
         auditService.record(
             user.username(),
@@ -201,61 +212,82 @@ public class AuthService {
     }
 
     /**
-     * Creates a temporary password reset token.
-     * In demo mode, returns the token and link directly on screen since no live email service is configured.
+     * Initiates a password reset without revealing whether an account exists.
+     * Only stores a SHA-256 hash of the token (15-minute expiry, invalidating prior tokens)
+     * and never logs any token value. Only returns an on-screen reset link when
+     * {@code payresolve.auth.demo-reset-links=true} AND the target account role is VIEWER.
      */
     @Transactional
     public ForgotPasswordResponse requestPasswordReset(String identifier) {
-        UserRecord user = userRepository.findByUsername(identifier)
-            .or(() -> userRepository.findByEmail(identifier))
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + identifier));
+        String trimmed = identifier == null ? "" : identifier.trim();
+        Optional<UserRecord> userOpt = trimmed.isEmpty()
+            ? Optional.empty()
+            : userRepository.findByUsername(trimmed).or(() -> userRepository.findByEmail(trimmed));
 
-        String token = UUID.randomUUID().toString().replace("-", "");
+        if (userOpt.isEmpty()) {
+            return new ForgotPasswordResponse(GENERIC_RESET_MESSAGE, null, null, null);
+        }
+
+        UserRecord user = userOpt.get();
         Instant now = clock.instant();
         Instant expiresAt = now.plus(15, ChronoUnit.MINUTES);
+
+        resetTokenRepository.invalidateActiveTokensForUser(user.id(), now);
+
+        String rawToken = generateSecureToken();
+        String tokenHash = sha256Hex(rawToken);
 
         PasswordResetTokenRecord tokenRecord = new PasswordResetTokenRecord(
             null,
             user.id(),
-            token,
+            tokenHash,
             expiresAt,
             null,
             now
         );
-
         resetTokenRepository.insert(tokenRecord);
-        log.info("Generated password reset token for user {}: token={}", user.username(), token);
+        log.info("Issued password reset token for userId={} (expiresAt={})", user.id(), expiresAt);
 
-        String resetUrl = "/reset-password?token=" + token;
-        String notice = "Demo mode notice: No external email delivery service is configured. You can use the link or token displayed here to reset your password.";
+        if (authProperties.isDemoResetLinks() && "VIEWER".equalsIgnoreCase(user.role())) {
+            String resetUrl = "/reset-password?token=" + rawToken;
+            String notice = "Demo reset link (VIEWER only, valid for 15 minutes): no external email service is configured.";
+            return new ForgotPasswordResponse(GENERIC_RESET_MESSAGE, rawToken, resetUrl, notice);
+        }
 
-        return new ForgotPasswordResponse(
-            "Password reset link generated successfully.",
-            token,
-            resetUrl,
-            notice
-        );
+        return new ForgotPasswordResponse(GENERIC_RESET_MESSAGE, null, null, null);
     }
 
     /**
-     * Resets password using an unexpired, unused token.
+     * Resets password using an unexpired, unused token (looked up by SHA-256 hash)
+     * and signs out all existing sessions for that user.
      */
     @Transactional
     public void resetPassword(String token, String newPassword) {
-        PasswordResetTokenRecord tokenRecord = resetTokenRepository.findByToken(token)
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Invalid password reset token");
+        }
+
+        String tokenHash = sha256Hex(token.trim());
+        PasswordResetTokenRecord tokenRecord = resetTokenRepository.findByToken(tokenHash)
             .orElseThrow(() -> new IllegalArgumentException("Invalid password reset token"));
 
         if (tokenRecord.usedAt() != null) {
             throw new IllegalArgumentException("This password reset token has already been used");
         }
 
-        if (tokenRecord.expiresAt().isBefore(clock.instant())) {
+        Instant now = clock.instant();
+        if (!tokenRecord.expiresAt().isAfter(now)) {
             throw new IllegalArgumentException("Password reset token has expired. Please request a new one");
         }
 
         String newHash = passwordEncoder.encode(newPassword);
         userRepository.updatePassword(tokenRecord.userId(), newHash);
-        resetTokenRepository.markUsed(tokenRecord.id(), clock.instant());
+        resetTokenRepository.markUsed(tokenRecord.id(), now);
+
+        userRepository.findById(tokenRecord.userId()).ifPresent(user -> {
+            loginAttemptService.clearFailures(user.username());
+            activeSessionRegistry.invalidateSessionsForUser(user.username());
+        });
 
         auditService.record(
             "system",
@@ -287,8 +319,25 @@ public class AuthService {
         SecurityContextHolder.clearContext();
         HttpSession session = request.getSession(false);
         if (session != null) {
+            activeSessionRegistry.unregisterSession(session);
             session.invalidate();
         }
+    }
+
+    static String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
+    private String generateSecureToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }
 

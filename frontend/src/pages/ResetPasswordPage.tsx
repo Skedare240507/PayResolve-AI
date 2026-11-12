@@ -1,50 +1,55 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
 import { performPasswordReset } from '../lib/authStore';
 import { toast } from '../lib/toast';
 
 export default function ResetPasswordPage() {
-  const [newPassword, setNewPassword] = useState('•••••••');
+  const [searchParams] = useSearchParams();
+  const initialToken = searchParams.get('token') || '';
+  const [tokenInput, setTokenInput] = useState(initialToken);
+  const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [touched, setTouched] = useState(true);
+  const [touched, setTouched] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const token = searchParams.get('token') || 'demo_token';
-
-  const realPassword = newPassword === '•••••••' ? 'shortpw' : newPassword;
-  const isLongEnough = realPassword.length >= 8;
-  const isTooShort = realPassword.length > 0 && !isLongEnough;
+  const isLongEnough = newPassword.length >= 8;
+  const isTooShort = newPassword.length > 0 && !isLongEnough;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
     setErrorMsg('');
 
+    const trimmedToken = tokenInput.trim();
+    if (!trimmedToken) {
+      setErrorMsg('A valid password reset token is required.');
+      return;
+    }
+
     if (!isLongEnough) {
       setErrorMsg('Password must be at least 8 characters.');
       return;
     }
 
-    if (realPassword !== confirmPassword) {
+    if (newPassword !== confirmPassword) {
       setErrorMsg('Passwords do not match.');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await performPasswordReset(token, realPassword);
+      const res = await performPasswordReset(trimmedToken, newPassword);
       if (res.success) {
-        toast.success('Password updated successfully.');
+        toast.success('Password updated successfully. All other sessions were signed out.');
         navigate('/password-updated');
       } else {
         setErrorMsg(res.message || 'Failed to reset password. The link may have expired.');
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Invalid or expired token.');
+      setErrorMsg(err instanceof Error ? err.message : 'Invalid or expired reset token.');
     } finally {
       setLoading(false);
     }
@@ -58,7 +63,7 @@ export default function ResetPasswordPage() {
             Choose a new password
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-            Use at least 8 characters.
+            Use at least 8 characters. Reset tokens expire after 15 minutes and resetting signs out all active sessions.
           </p>
         </div>
 
@@ -69,6 +74,22 @@ export default function ResetPasswordPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!initialToken && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Reset token
+              </label>
+              <input
+                type="text"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                placeholder="Paste your reset token"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white dark:bg-[#131b26]"
+                required
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
               New password
@@ -79,9 +100,6 @@ export default function ResetPasswordPage() {
               onChange={(e) => {
                 setNewPassword(e.target.value);
                 setTouched(true);
-              }}
-              onFocus={() => {
-                if (newPassword === '•••••••') setNewPassword('');
               }}
               className={`w-full px-3.5 py-2.5 rounded-lg border text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:border-transparent bg-white dark:bg-[#131b26] ${
                 isTooShort && touched
@@ -118,6 +136,15 @@ export default function ResetPasswordPage() {
             {loading ? 'Updating password...' : 'Update password'}
           </button>
         </form>
+
+        <div className="pt-1">
+          <Link
+            to="/sign-in"
+            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+          >
+            Back to sign in
+          </Link>
+        </div>
       </div>
     </AuthLayout>
   );

@@ -48,6 +48,7 @@ class AuthServiceTest {
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);
     private final AuthProperties authProperties = new AuthProperties();
+    private final ActiveSessionRegistry activeSessionRegistry = new ActiveSessionRegistry();
 
     private AuthService authService;
 
@@ -60,6 +61,7 @@ class AuthServiceTest {
             authProperties,
             passwordEncoder,
             new LoginAttemptService(clock),
+            activeSessionRegistry,
             clock
         );
     }
@@ -93,36 +95,92 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Forgot password generates reset token with expiry and demo mode notice")
-    void shouldGenerateResetTokenWithDemoNotice() {
-        UserRecord user = new UserRecord(
-            1L, "operator", "operator@example.com", "hash", "OPERATOR", clock.instant(), clock.instant()
+    @DisplayName("Forgot password by default hides account existence and returns no token/link for any role")
+    void forgotPasswordDefaultHidesTokenAndAccountExistence() {
+        UserRecord viewer = new UserRecord(
+            2L, "viewer", "viewer@example.com", "hash", "VIEWER", clock.instant(), clock.instant()
         );
-        when(userRepository.findByUsername("operator")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsername("viewer")).thenReturn(Optional.of(viewer));
+        when(userRepository.findByUsername("missing")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("missing")).thenReturn(Optional.empty());
 
-        ForgotPasswordResponse response = authService.requestPasswordReset("operator");
+        ForgotPasswordResponse viewerRes = authService.requestPasswordReset("viewer");
+        ForgotPasswordResponse missingRes = authService.requestPasswordReset("missing");
 
-        assertThat(response.resetToken()).isNotBlank();
-        assertThat(response.resetUrl()).contains("/reset-password?token=");
-        assertThat(response.demoNotice()).contains("Demo mode notice");
+        assertThat(viewerRes.message()).isEqualTo(AuthService.GENERIC_RESET_MESSAGE);
+        assertThat(viewerRes.resetToken()).isNull();
+        assertThat(viewerRes.resetUrl()).isNull();
+        assertThat(viewerRes.demoNotice()).isNull();
+        assertThat(missingRes).isEqualTo(viewerRes);
 
-        verify(resetTokenRepository).insert(any());
+        verify(resetTokenRepository).invalidateActiveTokensForUser(2L, clock.instant());
+        verify(resetTokenRepository).insert(argThat(r -> r.tokenHash().length() == 64));
     }
 
     @Test
-    @DisplayName("Reset password updates password hash and marks token used")
+    @DisplayName("Demo reset links only returned when demoResetLinks=true AND target role is VIEWER (never OPERATOR)")
+    void demoResetLinksViewerOnly() {
+        authProperties.setDemoResetLinks(true);
+
+        UserRecord viewer = new UserRecord(
+            2L, "viewer", "viewer@example.com", "hash", "VIEWER", clock.instant(), clock.instant()
+        );
+        UserRecord operator = new UserRecord(
+            1L, "operator", "operator@example.com", "hash", "OPERATOR", clock.instant(), clock.instant()
+        );
+        when(userRepository.findByUsername("viewer")).thenReturn(Optional.of(viewer));
+        when(userRepository.findByUsername("operator")).thenReturn(Optional.of(operator));
+
+        ForgotPasswordResponse viewerRes = authService.requestPasswordReset("viewer");
+        assertThat(viewerRes.resetToken()).isNotBlank();
+        assertThat(viewerRes.resetUrl()).isEqualTo("/reset-password?token=" + viewerRes.resetToken());
+        assertThat(viewerRes.demoNotice()).contains("VIEWER only");
+
+        ForgotPasswordResponse opRes = authService.requestPasswordReset("operator");
+        assertThat(opRes.message()).isEqualTo(AuthService.GENERIC_RESET_MESSAGE);
+        assertThat(opRes.resetToken()).isNull();
+        assertThat(opRes.resetUrl()).isNull();
+        assertThat(opRes.demoNotice()).isNull();
+    }
+
+    @Test
+    @DisplayName("Reset password hashes token to SHA-256, marks token used, and invalidates active user sessions")
     void shouldResetPassword() {
+        String rawToken = "valid-token-123";
+        String tokenHash = AuthService.sha256Hex(rawToken);
         PasswordResetTokenRecord tokenRecord = new PasswordResetTokenRecord(
-            10L, 1L, "valid-token-123", clock.instant().plus(15, ChronoUnit.MINUTES), null, clock.instant()
+            10L, 1L, tokenHash, clock.instant().plus(15, ChronoUnit.MINUTES), null, clock.instant()
+        );
+        UserRecord operator = new UserRecord(
+            1L, "operator", "op@example.com", "oldHash", "OPERATOR", clock.instant(), clock.instant()
         );
 
-        when(resetTokenRepository.findByToken("valid-token-123")).thenReturn(Optional.of(tokenRecord));
+        when(resetTokenRepository.findByToken(tokenHash)).thenReturn(Optional.of(tokenRecord));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(operator));
 
-        authService.resetPassword("valid-token-123", "newPassword456");
+        HttpSession session = mock(HttpSession.class);
+        activeSessionRegistry.registerSession("operator", session);
+
+        authService.resetPassword(rawToken, "newPassword456");
 
         verify(userRepository).updatePassword(eq(1L), anyString());
         verify(resetTokenRepository).markUsed(eq(10L), eq(clock.instant()));
+        verify(session).invalidate();
         verify(auditService).record(eq("system"), eq("PASSWORD_RESET"), eq("USER"), eq("1"), any());
+    }
+
+    @Test
+    @DisplayName("Reset password rejects expired tokens after 15 minutes")
+    void shouldRejectExpiredResetToken() {
+        String rawToken = "expired-token";
+        PasswordResetTokenRecord expired = new PasswordResetTokenRecord(
+            11L, 1L, AuthService.sha256Hex(rawToken), clock.instant().minusSeconds(1), null, clock.instant().minus(16, ChronoUnit.MINUTES)
+        );
+        when(resetTokenRepository.findByToken(AuthService.sha256Hex(rawToken))).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> authService.resetPassword(rawToken, "newPassword456"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expired");
     }
 
     @Test

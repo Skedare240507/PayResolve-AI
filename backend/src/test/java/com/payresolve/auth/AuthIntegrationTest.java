@@ -96,49 +96,120 @@ class AuthIntegrationTest {
     }
 
     @Test
-    @DisplayName("Forgot password and reset password flow with on-screen demo link")
-    void shouldCompleteForgotPasswordFlow() throws Exception {
+    @DisplayName("Default forgot-password never exposes token or account existence and returns generic message")
+    void defaultForgotPasswordHidesTokenAndAccountExistence() throws Exception {
+        ForgotPasswordRequest existingViewer = new ForgotPasswordRequest("viewer");
+        ForgotPasswordRequest existingOperator = new ForgotPasswordRequest("operator");
+        ForgotPasswordRequest missingUser = new ForgotPasswordRequest("nonexistent_user_xyz");
+
+        for (ForgotPasswordRequest req : new ForgotPasswordRequest[]{existingViewer, existingOperator, missingUser}) {
+            mockMvc.perform(post("/api/auth/forgot-password")
+                    .with(csrf())
+                    .with(r -> { r.setRemoteAddr("198.51.100.77"); return r; })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(AuthService.GENERIC_RESET_MESSAGE))
+                .andExpect(jsonPath("$.resetToken").doesNotExist())
+                .andExpect(jsonPath("$.resetUrl").doesNotExist())
+                .andExpect(jsonPath("$.demoNotice").doesNotExist());
+        }
+    }
+
+    @Test
+    @DisplayName("Password reset invalidates older tokens, signs out active sessions, and stores only SHA-256 hash")
+    void shouldInvalidatePriorTokensAndActiveSessionsOnReset(
+        @Autowired AuthProperties authProperties,
+        @Autowired PasswordResetTokenRepository tokenRepository
+    ) throws Exception {
         String uniqueUser = "resetuser_" + System.currentTimeMillis();
         SignUpRequest signUp = new SignUpRequest(uniqueUser, uniqueUser + "@test.com", "oldPassword123");
         mockMvc.perform(post("/api/auth/signup")
                 .with(csrf())
+                .with(r -> { r.setRemoteAddr("198.51.100.81"); return r; })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signUp)))
             .andExpect(status().isOk());
 
-        // 1. Request password reset
-        ForgotPasswordRequest forgotReq = new ForgotPasswordRequest(uniqueUser);
-        MvcResult forgotResult = mockMvc.perform(post("/api/auth/forgot-password")
+        // Establish two active sessions for this user
+        MvcResult login1 = mockMvc.perform(post("/api/auth/login")
                 .with(csrf())
+                .with(r -> { r.setRemoteAddr("198.51.100.82"); return r; })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(forgotReq)))
+                .content(objectMapper.writeValueAsString(new LoginRequest(uniqueUser, "oldPassword123"))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.resetToken").isString())
-            .andExpect(jsonPath("$.resetUrl").isString())
-            .andExpect(jsonPath("$.demoNotice").isString())
             .andReturn();
+        MockHttpSession session1 = (MockHttpSession) login1.getRequest().getSession(false);
 
-        JsonNode forgotJson = objectMapper.readTree(forgotResult.getResponse().getContentAsString());
-        String token = forgotJson.get("resetToken").asText();
-        assertThat(token).isNotBlank();
-
-        // 2. Reset password
-        ResetPasswordRequest resetReq = new ResetPasswordRequest(token, "brandNewPassword123");
-        mockMvc.perform(post("/api/auth/reset-password")
+        MvcResult login2 = mockMvc.perform(post("/api/auth/login")
                 .with(csrf())
+                .with(r -> { r.setRemoteAddr("198.51.100.83"); return r; })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(resetReq)))
+                .content(objectMapper.writeValueAsString(new LoginRequest(uniqueUser, "oldPassword123"))))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.success").value(true));
+            .andReturn();
+        MockHttpSession session2 = (MockHttpSession) login2.getRequest().getSession(false);
 
-        // 3. Verify login works with the new password
-        LoginRequest loginNew = new LoginRequest(uniqueUser, "brandNewPassword123");
-        mockMvc.perform(post("/api/auth/login")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(loginNew)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.username").value(uniqueUser));
+        boolean prevDemoLinks = authProperties.isDemoResetLinks();
+        authProperties.setDemoResetLinks(true);
+        try {
+            // Issue first token, then second token -> first token must become invalidated
+            MvcResult firstForgot = mockMvc.perform(post("/api/auth/forgot-password")
+                    .with(csrf())
+                    .with(r -> { r.setRemoteAddr("198.51.100.84"); return r; })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new ForgotPasswordRequest(uniqueUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resetToken").isString())
+                .andReturn();
+            String firstToken = objectMapper.readTree(firstForgot.getResponse().getContentAsString()).get("resetToken").asText();
+
+            MvcResult secondForgot = mockMvc.perform(post("/api/auth/forgot-password")
+                    .with(csrf())
+                    .with(r -> { r.setRemoteAddr("198.51.100.85"); return r; })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new ForgotPasswordRequest(uniqueUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resetToken").isString())
+                .andExpect(jsonPath("$.resetUrl").isString())
+                .andExpect(jsonPath("$.demoNotice").isString())
+                .andReturn();
+            String secondToken = objectMapper.readTree(secondForgot.getResponse().getContentAsString()).get("resetToken").asText();
+
+            // Raw token is NOT stored in token_hash; SHA-256 hash IS stored
+            assertThat(tokenRepository.findByToken(secondToken)).isEmpty();
+            assertThat(tokenRepository.findByToken(AuthService.sha256Hex(secondToken))).isPresent();
+
+            // Older token was invalidated when second token was issued
+            mockMvc.perform(post("/api/auth/reset-password")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new ResetPasswordRequest(firstToken, "brandNewPassword123"))))
+                .andExpect(status().isBadRequest());
+
+            // Valid second token succeeds
+            mockMvc.perform(post("/api/auth/reset-password")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new ResetPasswordRequest(secondToken, "brandNewPassword123"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+            // Previously active sessions are now invalidated
+            mockMvc.perform(get("/api/auth/me").session(session1)).andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/auth/me").session(session2)).andExpect(status().isUnauthorized());
+
+            // Login works with new password
+            mockMvc.perform(post("/api/auth/login")
+                    .with(csrf())
+                    .with(r -> { r.setRemoteAddr("198.51.100.86"); return r; })
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(new LoginRequest(uniqueUser, "brandNewPassword123"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(uniqueUser));
+        } finally {
+            authProperties.setDemoResetLinks(prevDemoLinks);
+        }
     }
 }
 

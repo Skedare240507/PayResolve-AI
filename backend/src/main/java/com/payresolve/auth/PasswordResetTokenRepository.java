@@ -71,6 +71,18 @@ public class PasswordResetTokenRepository {
         log.debug("Marked reset token id={} as used", id);
     }
 
+    public void invalidateActiveTokensForUser(Long userId, Instant invalidatedAt) {
+        String sql = """
+            UPDATE password_reset_tokens
+            SET used_at = :invalidatedAt
+            WHERE user_id = :userId AND used_at IS NULL
+            """;
+        jdbcClient.sql(sql)
+            .param("userId", userId)
+            .param("invalidatedAt", Timestamp.from(invalidatedAt))
+            .update();
+    }
+
     private static class TokenRowMapper implements RowMapper<PasswordResetTokenRecord> {
         @Override
         public PasswordResetTokenRecord mapRow(ResultSet rs, int rowNum) throws SQLException {

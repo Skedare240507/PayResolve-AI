@@ -87,3 +87,4 @@ payresolve:
     operator-password: test_operator_password
     viewer-username: viewer
     viewer-password: test_viewer_password
+    demo-reset-links: false

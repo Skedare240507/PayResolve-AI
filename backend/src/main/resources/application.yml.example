@@ -119,3 +119,4 @@ payresolve:
     operator-password: ${OPERATOR_PASSWORD:}
     viewer-username: ${VIEWER_USERNAME:viewer}
     viewer-password: ${VIEWER_PASSWORD:}
+    demo-reset-links: ${DEMO_RESET_LINKS:false}

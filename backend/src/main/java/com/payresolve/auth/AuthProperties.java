@@ -14,6 +14,7 @@ public class AuthProperties {
     private String operatorPassword = "operator123";
     private String viewerUsername = "viewer";
     private String viewerPassword = "viewer123";
+    private boolean demoResetLinks = false;
 
     public String getOperatorUsername() {
         return operatorUsername != null && !operatorUsername.isBlank() ? operatorUsername : "operator";
@@ -45,6 +46,14 @@ public class AuthProperties {
 
     public void setViewerPassword(String viewerPassword) {
         this.viewerPassword = viewerPassword;
+    }
+
+    public boolean isDemoResetLinks() {
+        return demoResetLinks;
+    }
+
+    public void setDemoResetLinks(boolean demoResetLinks) {
+        this.demoResetLinks = demoResetLinks;
     }
 }
 
