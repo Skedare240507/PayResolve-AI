@@ -5,8 +5,10 @@ import com.payresolve.cases.dto.CaseDetailsDto;
 import com.payresolve.common.ResourceNotFoundException;
 import com.payresolve.ingest.EventQueryService;
 import com.payresolve.ingest.dto.OrderWebhookTraceDto;
+import com.payresolve.shop.dto.BuyerOrderStatusDto;
 import com.payresolve.shop.dto.OrderTraceDto;
 import com.payresolve.shop.dto.OrderTraceStepDto;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -37,6 +39,25 @@ public class OrderTraceService {
         this.eventQueryService = eventQueryService;
         this.caseService = caseService;
         this.clock = clock;
+    }
+
+    /**
+     * Public minimal buyer return status check gated by the PayPal checkout token.
+     */
+    public BuyerOrderStatusDto getBuyerOrderStatus(String orderId, String token) {
+        ShopOrder order = shopOrderService.findOrderById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Shop order not found: " + orderId));
+        if (token == null || token.isBlank() || order.paypalOrderId() == null || !order.paypalOrderId().equals(token.trim())) {
+            throw new AccessDeniedException("Invalid PayPal checkout token for order " + orderId);
+        }
+        OrderTraceDto trace = getOrderTrace(orderId);
+        return new BuyerOrderStatusDto(
+            trace.orderStatus(),
+            trace.totalMinor(),
+            trace.currency(),
+            order.total().format(),
+            trace.steps()
+        );
     }
 
     /**

@@ -147,7 +147,16 @@ class ShopIntegrationTest {
                 .andExpect(jsonPath("$.paypalOrderId").value("PP-ORD-999"))
                 .andExpect(jsonPath("$.approveUrl").value("https://www.sandbox.paypal.com/checkoutnow?token=PP-ORD-999"));
 
-        // Step 3: Capture order server-side
+        // Step 3: Verify PayPal order APPROVED, capture server-side publicly with token
+        PayPalOrder mockPayPalApproved = new PayPalOrder(
+                "PP-ORD-999",
+                "APPROVED",
+                "CAPTURE",
+                List.of(new PurchaseUnit("PP-ORD-999", order.id(), new Amount("USD", "24.00"), null)),
+                List.of()
+        );
+        when(payPalOrdersClient.getOrder("PP-ORD-999")).thenReturn(mockPayPalApproved);
+
         CaptureSummary captureSummary = new CaptureSummary("CAP-999", "COMPLETED", new Amount("USD", "24.00"), null, null, null, null);
         PaymentCollection payments = new PaymentCollection(List.of(captureSummary), List.of());
         PayPalOrder mockPayPalCaptured = new PayPalOrder(
@@ -159,11 +168,39 @@ class ShopIntegrationTest {
         );
         when(payPalOrdersClient.captureOrder("PP-ORD-999")).thenReturn(mockPayPalCaptured);
 
+        // Unauthenticated buyer return with valid token succeeds & returns minimal fields only
         mockMvc.perform(post("/api/shop/orders/" + order.id() + "/capture")
+                .param("token", "PP-ORD-999")
                 .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_CONFIRMATION"))
-                .andExpect(jsonPath("$.captureId").value("CAP-999"));
+                .andExpect(jsonPath("$.amountMinor").value(2400))
+                .andExpect(jsonPath("$.amount").value("24.00 USD"))
+                .andExpect(jsonPath("$.steps", hasSize(8)))
+                .andExpect(jsonPath("$.customerLabel").doesNotExist())
+                .andExpect(jsonPath("$.captureId").doesNotExist());
+
+        // Idempotent repeat capture returns 200 without invoking captureOrder again
+        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/capture")
+                .param("token", "PP-ORD-999")
+                .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_CONFIRMATION"));
+
+        // Public status endpoint works with valid token and rejects wrong/missing token
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/status")
+                .param("token", "PP-ORD-999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_CONFIRMATION"))
+                .andExpect(jsonPath("$.steps", hasSize(8)))
+                .andExpect(jsonPath("$.customerLabel").doesNotExist());
+
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/status")
+                .param("token", "WRONG-TOKEN"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/status"))
+                .andExpect(status().isBadRequest());
 
         // Verify order is strictly AWAITING_CONFIRMATION (NOT PAID!)
         ShopOrder awaitingOrder = shopOrderService.findOrderById(order.id()).orElseThrow();
@@ -303,18 +340,14 @@ class ShopIntegrationTest {
     }
 
     @Test
-    @DisplayName("7. Return/cancel URLs use the UI origin (FRONTEND_ORIGIN), not the API URL")
-    void checkoutShouldUseUiOriginForReturnAndCancelUrls() {
-        // Verifies the fix for the deployment bug: before the fix, return_url and cancel_url
-        // pointed at the API server (APP_PUBLIC_URL), which is not a UI page. After the fix,
-        // they point at the UI origin so the buyer lands on /shop/return or /shop/cancel.
+    @DisplayName("7. Return/cancel URLs ignore client params, use FRONTEND_ORIGIN, and reject unapproved capture or bad origins")
+    void checkoutIgnoresClientUrlsAndValidatesOrigins() throws Exception {
         ShopOrder order = shopOrderService.createOrderFromCart(
                 List.of(new OrderItemRequest("mug", 1)),
                 "Return URL Test",
                 "USD"
         );
 
-        // Capture the URLs passed to PayPal via the mock
         final String[] capturedReturn = {null};
         final String[] capturedCancel = {null};
 
@@ -333,21 +366,37 @@ class ShopIntegrationTest {
                 org.mockito.ArgumentMatchers.argThat(c -> { capturedCancel[0] = c; return true; })
         )).thenReturn(mockPayPal);
 
-        shopOrderService.initiatePayPalCheckout(order.id(), null, null);
+        // Even if caller supplies evil returnUrl/cancelUrl, backend ignores them completely
+        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/checkout")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
+                .param("returnUrl", "https://evil.example/steal")
+                .param("cancelUrl", "https://evil.example/cancel"))
+                .andExpect(status().isOk());
 
-        // The return/cancel URLs must point at the UI, not the API.
-        // In tests, payresolve.frontend-origin defaults to http://localhost:5173.
         assertThat(capturedReturn[0])
-                .as("return_url must point at the UI /shop/return, not the API")
-                .startsWith("http://localhost:5173")
-                .contains("/shop/return")
-                .doesNotContain(":8080");
-
+                .isEqualTo("http://localhost:5173/shop/return?orderId=" + order.id())
+                .doesNotContain("evil.example");
         assertThat(capturedCancel[0])
-                .as("cancel_url must point at the UI /shop/cancel, not the API")
-                .startsWith("http://localhost:5173")
-                .contains("/shop/cancel")
-                .doesNotContain(":8080");
+                .isEqualTo("http://localhost:5173/shop/cancel?orderId=" + order.id())
+                .doesNotContain("evil.example");
+
+        // Unapproved PayPal order (still CREATED) cannot be captured -> 409 Conflict
+        when(payPalOrdersClient.getOrder("PP-ORD-URL")).thenReturn(mockPayPal);
+        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/capture")
+                .param("token", "PP-ORD-URL")
+                .with(csrf()))
+                .andExpect(status().isConflict());
+
+        // Startup validator rejects missing or localhost FRONTEND_ORIGIN when APP_PUBLIC_URL is https
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                FrontendOriginValidator.validate("https://api.example.com", "http://localhost:5173"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("FRONTEND_ORIGIN");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                FrontendOriginValidator.validate("https://api.example.com", ""))
+                .isInstanceOf(IllegalStateException.class);
+        FrontendOriginValidator.validate("https://api.example.com", "https://ui.example.com");
     }
 
     @Test

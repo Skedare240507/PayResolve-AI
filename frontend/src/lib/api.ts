@@ -89,6 +89,13 @@ export type ShopShipmentRecord = components['schemas']['ShipmentResponseDto'];
 export type ShipmentResponseDto = components['schemas']['ShipmentResponseDto'];
 export type OrderTraceDto = components['schemas']['OrderTraceDto'];
 export type OrderTraceStepDto = components['schemas']['OrderTraceStepDto'];
+export interface BuyerOrderStatusDto {
+  status: string;
+  amountMinor: number;
+  currency: string;
+  amount: string;
+  steps: OrderTraceStepDto[];
+}
 
 // PayPal Diagnostics types
 export type PayPalDiagnosticsDto = components['schemas']['PayPalDiagnosticsDto'];
@@ -614,10 +621,22 @@ export const api = {
       });
     },
 
-    capture: (orderId: string) =>
-      fetchApi<CaptureOrderResponseDto>(`/api/shop/orders/${orderId}/capture`, {
-        method: 'POST',
-      }),
+    capture: (orderId: string, token: string) =>
+      fetchApi<BuyerOrderStatusDto>(
+        `/api/shop/orders/${encodeURIComponent(orderId)}/capture?token=${encodeURIComponent(token)}`,
+        {
+          method: 'POST',
+          skipAuthRedirect: true,
+        }
+      ),
+
+    getStatus: (orderId: string, token: string) =>
+      fetchApi<BuyerOrderStatusDto>(
+        `/api/shop/orders/${encodeURIComponent(orderId)}/status?token=${encodeURIComponent(token)}`,
+        {
+          skipAuthRedirect: true,
+        }
+      ),
 
     refund: (orderId: string, amountMinor: number, reason?: string) =>
       fetchApi<RefundResponseDto>(`/api/shop/orders/${orderId}/refund`, {

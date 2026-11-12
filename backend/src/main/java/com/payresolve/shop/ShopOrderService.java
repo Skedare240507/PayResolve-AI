@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -281,19 +282,14 @@ public class ShopOrderService {
     // =========================================================================
 
     @Transactional
-    public CheckoutResponseDto initiatePayPalCheckout(String shopOrderId, String returnUrl, String cancelUrl) {
+    public CheckoutResponseDto initiatePayPalCheckout(String shopOrderId, String ignoredReturnUrl, String ignoredCancelUrl) {
         ShopOrder order = findOrderById(shopOrderId)
             .orElseThrow(() -> new ResourceNotFoundException("Shop order not found: " + shopOrderId));
 
-        // Build return/cancel URLs using the UI origin so the buyer lands on the
-        // shop UI pages after PayPal approval, not on the API server.
-        // The shop UI handles /shop/return and /shop/cancel and reads query params.
-        String effectiveReturnUrl = (returnUrl != null && !returnUrl.isBlank())
-            ? returnUrl
-            : (frontendOrigin + "/shop/return?orderId=" + order.id());
-        String effectiveCancelUrl = (cancelUrl != null && !cancelUrl.isBlank())
-            ? cancelUrl
-            : (frontendOrigin + "/shop/cancel?orderId=" + order.id());
+        // Always ignore any client-supplied returnUrl/cancelUrl to prevent open redirects.
+        String sanitizedFrontendOrigin = frontendOrigin.trim().replaceAll("/+$", "");
+        String effectiveReturnUrl = sanitizedFrontendOrigin + "/shop/return?orderId=" + order.id();
+        String effectiveCancelUrl = sanitizedFrontendOrigin + "/shop/cancel?orderId=" + order.id();
 
         PayPalOrder payPalOrder = payPalOrdersClient.createOrder(
             order.id(),
@@ -331,21 +327,24 @@ public class ShopOrderService {
     }
 
     /**
-     * Captures payment for an approved order.
+     * Captures payment for an approved order after verifying the buyer return token matches
+     * the order's linked PayPal order ID and checking with PayPal that the order is APPROVED.
      * Transitions shop order to AWAITING_CONFIRMATION (NOT PAID!).
-     * The order only becomes PAID when the verified webhook is processed.
-     * Idempotent if the order is already AWAITING_CONFIRMATION or PAID.
+     * Idempotent if already AWAITING_CONFIRMATION or PAID.
      */
     @Transactional
-    public CaptureOrderResponseDto capturePayPalOrder(String shopOrderId) {
+    public CaptureOrderResponseDto capturePayPalOrder(String shopOrderId, String token) {
         ShopOrder order = findOrderById(shopOrderId)
             .orElseThrow(() -> new ResourceNotFoundException("Shop order not found: " + shopOrderId));
 
         if (order.paypalOrderId() == null || order.paypalOrderId().isBlank()) {
             throw new ValidationException("Shop order " + shopOrderId + " has no linked PayPal order ID");
         }
+        if (token == null || token.isBlank() || !order.paypalOrderId().equals(token.trim())) {
+            throw new AccessDeniedException("Invalid PayPal checkout token for order " + shopOrderId);
+        }
 
-        // Idempotent guard: avoid calling PayPal /capture twice on refresh or React StrictMode double-mount
+        // Idempotent guard: avoid calling PayPal /capture twice on refresh or double-mount
         if (order.isPaid() || order.isAwaitingConfirmation()) {
             String existingCaptureId = order.paypalCaptureId() != null
                 ? order.paypalCaptureId()
@@ -363,8 +362,21 @@ public class ShopOrderService {
             );
         }
 
-        log.info("Capturing PayPal order {} for shopOrder {}", order.paypalOrderId(), order.id());
-        PayPalOrder capturedOrder = payPalOrdersClient.captureOrder(order.paypalOrderId());
+        // Verify with PayPal that the buyer actually approved the order before capturing
+        PayPalOrder remoteOrder = payPalOrdersClient.getOrder(order.paypalOrderId());
+        String remoteStatus = remoteOrder != null && remoteOrder.status() != null ? remoteOrder.status().trim() : "";
+
+        PayPalOrder capturedOrder;
+        if ("COMPLETED".equalsIgnoreCase(remoteStatus)) {
+            capturedOrder = remoteOrder;
+        } else if ("APPROVED".equalsIgnoreCase(remoteStatus)) {
+            log.info("Capturing approved PayPal order {} for shopOrder {}", order.paypalOrderId(), order.id());
+            capturedOrder = payPalOrdersClient.captureOrder(order.paypalOrderId());
+        } else {
+            throw new IllegalStateException(
+                "PayPal order is not approved yet (current status: " + (remoteStatus.isEmpty() ? "UNKNOWN" : remoteStatus) + ")"
+            );
+        }
 
         String captureId = capturedOrder.findFirstCaptureId().orElse("CAP-" + UUID.randomUUID().toString().substring(0, 8));
 
@@ -373,8 +385,8 @@ public class ShopOrderService {
             UPDATE shop_orders
             SET status = 'AWAITING_CONFIRMATION',
                 buyer_approved_at = COALESCE(buyer_approved_at, :now),
-                captured_at = :now,
-                paypal_capture_id = :captureId,
+                captured_at = COALESCE(captured_at, :now),
+                paypal_capture_id = COALESCE(paypal_capture_id, :captureId),
                 updated_at = :now
             WHERE id = :id AND status NOT IN ('PAID', 'REFUNDED')
             """)

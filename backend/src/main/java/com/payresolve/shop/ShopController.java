@@ -1,7 +1,7 @@
 package com.payresolve.shop;
 
 import com.payresolve.common.ResourceNotFoundException;
-import com.payresolve.shop.dto.CaptureOrderResponseDto;
+import com.payresolve.shop.dto.BuyerOrderStatusDto;
 import com.payresolve.shop.dto.CheckoutResponseDto;
 import com.payresolve.shop.dto.CreateShopOrderRequest;
 import com.payresolve.shop.dto.OrderTraceDto;
@@ -106,20 +106,28 @@ public class ShopController {
 
     @PostMapping("/orders/{id}/checkout")
     @Operation(summary = "Initiate PayPal Sandbox checkout for a shop order")
-    public ResponseEntity<CheckoutResponseDto> initiateCheckout(
-            @PathVariable String id,
-            @RequestParam(required = false) String returnUrl,
-            @RequestParam(required = false) String cancelUrl
-    ) {
-        CheckoutResponseDto response = shopOrderService.initiatePayPalCheckout(id, returnUrl, cancelUrl);
+    public ResponseEntity<CheckoutResponseDto> initiateCheckout(@PathVariable String id) {
+        CheckoutResponseDto response = shopOrderService.initiatePayPalCheckout(id, null, null);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/orders/{id}/capture")
-    @Operation(summary = "Capture an approved PayPal order server-side (transitions to AWAITING_CONFIRMATION)")
-    public ResponseEntity<CaptureOrderResponseDto> captureOrder(@PathVariable String id) {
-        CaptureOrderResponseDto response = shopOrderService.capturePayPalOrder(id);
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Capture an approved PayPal order server-side using the buyer return token")
+    public ResponseEntity<BuyerOrderStatusDto> captureOrder(
+            @PathVariable String id,
+            @RequestParam("token") String token
+    ) {
+        shopOrderService.capturePayPalOrder(id, token);
+        return ResponseEntity.ok(orderTraceService.getBuyerOrderStatus(id, token));
+    }
+
+    @GetMapping("/orders/{id}/status")
+    @Operation(summary = "Public minimal buyer return status endpoint gated by the PayPal order token")
+    public ResponseEntity<BuyerOrderStatusDto> getBuyerStatus(
+            @PathVariable String id,
+            @RequestParam("token") String token
+    ) {
+        return ResponseEntity.ok(orderTraceService.getBuyerOrderStatus(id, token));
     }
 
     // =========================================================================

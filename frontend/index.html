@@ -8,6 +8,15 @@
     <script>
       (function() {
         try {
+          var redirectPath = sessionStorage.getItem('payresolve_redirect_path');
+          if (redirectPath) {
+            sessionStorage.removeItem('payresolve_redirect_path');
+            if (/^\/(?!\/)/.test(redirectPath)) {
+              window.history.replaceState(null, '', redirectPath);
+            }
+          }
+        } catch (e) {}
+        try {
           var saved = localStorage.getItem('payresolve-theme');
           var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (saved === 'dark' || (!saved && prefersDark)) {

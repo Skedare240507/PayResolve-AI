@@ -53,6 +53,7 @@ springdoc:
 
 payresolve:
   public-url: http://localhost:8080
+  frontend-origin: http://localhost:5173
   demo-mode: true
   session-timeout: 30m
   cors:

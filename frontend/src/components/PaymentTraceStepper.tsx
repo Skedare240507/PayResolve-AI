@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { GoogleIcon } from './GoogleIcon';
 import { InfoTip } from './InfoTip';
-import type { OrderTraceDto, OrderTraceStepDto } from '../lib/api';
+import type { OrderTraceStepDto } from '../lib/api';
 import type { MetricId } from '../lib/metricDefinitions';
 
 const STEP_METRICS: Record<string, { metricId: MetricId }> = {
@@ -72,7 +72,7 @@ function getStepStyle(step: OrderTraceStepDto): {
 }
 
 interface PaymentTraceStepperProps {
-  trace?: OrderTraceDto | null;
+  trace?: { steps?: OrderTraceStepDto[]; linkedCaseId?: string | null } | null;
   isLoading?: boolean;
   isError?: boolean;
   compact?: boolean;

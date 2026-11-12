@@ -63,6 +63,13 @@ function buildTracePayload(orderId, paid) {
 }
 
 async function setupCommonRoutes(page) {
+  await page.route('**/api/auth/csrf', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ token: 'playwright-csrf-token' }),
+    })
+  );
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({
       status: 200,
@@ -86,7 +93,7 @@ async function run() {
   if (!(await isServerUp(baseUrl))) {
     baseUrl = 'http://127.0.0.1:4173';
     console.log('Starting vite preview on port 4173 for return-page polling Playwright test...');
-    previewProc = spawn('npx', ['vite', 'preview', '--port', '4173', '--strictPort'], {
+    previewProc = spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], {
       cwd: frontendDir,
       shell: true,
       stdio: 'ignore',
@@ -114,41 +121,32 @@ async function run() {
       await setupCommonRoutes(page);
 
       let orderPollCount = 0;
-      await page.route('**/api/shop/orders/ORD-POLL-1/capture', (route) =>
+      await page.route('**/api/shop/orders/ORD-POLL-1/capture**', (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            orderId: 'ORD-POLL-1',
-            paypalOrderId: 'PP-ORD-POLL-1',
-            captureId: 'CAP-ORD-POLL-1',
             status: 'AWAITING_CONFIRMATION',
-            amountCapturedMinor: 2400,
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-POLL-1', false).steps,
           }),
         })
       );
 
-      await page.route('**/api/shop/orders/ORD-POLL-1/trace', (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildTracePayload('ORD-POLL-1', orderPollCount >= 3)),
-        })
-      );
-
-      await page.route('**/api/shop/orders/ORD-POLL-1', (route) => {
-        orderPollCount++;
-        const status = orderPollCount >= 3 ? 'PAID' : 'AWAITING_CONFIRMATION';
+      await page.route('**/api/shop/orders/ORD-POLL-1/status**', (route) => {
+        orderPollCount += 1;
+        const paid = orderPollCount >= 3;
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'ORD-POLL-1',
-            paypalOrderId: 'PP-ORD-POLL-1',
-            status,
-            totalMinor: 2400,
+            status: paid ? 'PAID' : 'AWAITING_CONFIRMATION',
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-POLL-1', paid).steps,
           }),
         });
       });
@@ -187,40 +185,31 @@ async function run() {
       await setupCommonRoutes(page);
 
       let timeoutPollCount = 0;
-      await page.route('**/api/shop/orders/ORD-TIMEOUT-1/capture', (route) =>
+      await page.route('**/api/shop/orders/ORD-TIMEOUT-1/capture**', (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            orderId: 'ORD-TIMEOUT-1',
-            paypalOrderId: 'PP-ORD-TIMEOUT-1',
-            captureId: 'CAP-TIMEOUT-1',
             status: 'AWAITING_CONFIRMATION',
-            amountCapturedMinor: 2400,
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-TIMEOUT-1', false).steps,
           }),
         })
       );
 
-      await page.route('**/api/shop/orders/ORD-TIMEOUT-1/trace', (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildTracePayload('ORD-TIMEOUT-1', false)),
-        })
-      );
-
-      await page.route('**/api/shop/orders/ORD-TIMEOUT-1', (route) => {
+      await page.route('**/api/shop/orders/ORD-TIMEOUT-1/status**', (route) => {
         timeoutPollCount++;
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'ORD-TIMEOUT-1',
-            paypalOrderId: 'PP-ORD-TIMEOUT-1',
             status: 'AWAITING_CONFIRMATION',
-            totalMinor: 2400,
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-TIMEOUT-1', false).steps,
           }),
         });
       });
@@ -263,40 +252,31 @@ async function run() {
       await setupCommonRoutes(page);
 
       let leavePollCount = 0;
-      await page.route('**/api/shop/orders/ORD-LEAVE-1/capture', (route) =>
+      await page.route('**/api/shop/orders/ORD-LEAVE-1/capture**', (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            orderId: 'ORD-LEAVE-1',
-            paypalOrderId: 'PP-ORD-LEAVE-1',
-            captureId: 'CAP-LEAVE-1',
             status: 'AWAITING_CONFIRMATION',
-            amountCapturedMinor: 2400,
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-LEAVE-1', false).steps,
           }),
         })
       );
 
-      await page.route('**/api/shop/orders/ORD-LEAVE-1/trace', (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildTracePayload('ORD-LEAVE-1', false)),
-        })
-      );
-
-      await page.route('**/api/shop/orders/ORD-LEAVE-1', (route) => {
+      await page.route('**/api/shop/orders/ORD-LEAVE-1/status**', (route) => {
         leavePollCount++;
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'ORD-LEAVE-1',
-            paypalOrderId: 'PP-ORD-LEAVE-1',
             status: 'AWAITING_CONFIRMATION',
-            totalMinor: 2400,
+            amountMinor: 2400,
             currency: 'USD',
+            amount: '24.00 USD',
+            steps: buildTracePayload('ORD-LEAVE-1', false).steps,
           }),
         });
       });

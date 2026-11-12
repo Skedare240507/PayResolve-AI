@@ -49,12 +49,14 @@ export default function App() {
           <Route path="/500" element={<ServerErrorPage />} />
           <Route path="/redirecting" element={<RedirectingPage />} />
 
+          {/* Public buyer PayPal return routes (token-gated, independent of admin session) */}
+          <Route path="/shop/return" element={<ShopReturnPage />} />
+          <Route path="/shop/cancel" element={<ShopCancelPage />} />
+
           {/* Protected dashboard routes */}
           <Route path="/queue" element={<ProtectedRoute><ExceptionQueuePage /></ProtectedRoute>} />
           <Route path="/case/:id" element={<ProtectedRoute><CaseDetailsPage /></ProtectedRoute>} />
           <Route path="/shop" element={<ProtectedRoute><DemoShopPage /></ProtectedRoute>} />
-          <Route path="/shop/return" element={<ProtectedRoute><ShopReturnPage /></ProtectedRoute>} />
-          <Route path="/shop/cancel" element={<ProtectedRoute><ShopCancelPage /></ProtectedRoute>} />
           <Route path="/actions" element={<ProtectedRoute><ActionsAuditPage /></ProtectedRoute>} />
           <Route path="/benchmark" element={<ProtectedRoute><BenchmarkPage /></ProtectedRoute>} />
           <Route path="/status" element={<ProtectedRoute><SandboxStatusPage /></ProtectedRoute>} />

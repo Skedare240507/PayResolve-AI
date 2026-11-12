@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PayResolve AI — Redirecting...</title>
+    <script>
+      (function () {
+        try {
+          var target = window.location.pathname + window.location.search + window.location.hash;
+          if (target && target !== '/') {
+            sessionStorage.setItem('payresolve_redirect_path', target);
+          }
+        } catch (e) {}
+        window.location.replace('/');
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
+

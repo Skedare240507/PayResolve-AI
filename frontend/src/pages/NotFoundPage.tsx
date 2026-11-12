@@ -1,9 +1,11 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { PayResolveLogo } from '../components/PayResolveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const missingPath = `${location.pathname}${location.search || ''}`;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#080c14] text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative">
@@ -20,9 +22,7 @@ export default function NotFoundPage() {
         </div>
 
         {/* 404 Bold Number */}
-        <h1 className="text-7xl sm:text-8xl font-black text-[#0066cc] tracking-tight">
-          404
-        </h1>
+        <h1 className="text-7xl sm:text-8xl font-black text-[#0066cc] tracking-tight">404</h1>
 
         {/* Title & subtitle */}
         <div className="space-y-2">
@@ -30,8 +30,14 @@ export default function NotFoundPage() {
             We could not find that page
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm mx-auto">
-            The case or page may have been deleted, or the link is incomplete. Cases are never removed, so check the id.
+            The case or page may not exist, or the link is incomplete. Cases are never removed, so
+            check the id.
           </p>
+          <div className="pt-1">
+            <span className="inline-block px-3 py-1 rounded-md bg-slate-100 dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
+              {missingPath}
+            </span>
+          </div>
         </div>
 
         {/* Action Buttons */}
