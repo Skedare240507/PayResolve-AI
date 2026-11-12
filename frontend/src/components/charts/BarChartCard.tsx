@@ -71,12 +71,29 @@ export function BarChartCard({
         formatter: ({ value }: { value?: number }) =>
           value == null ? '' : `${value}${valueSuffix}`,
       },
+      tooltip: {
+        renderer: (params: { datum?: Record<string, unknown> }) => {
+          const datum = params.datum || {};
+          const fullToolName = String(datum.toolName || datum[xKey] || '');
+          const val = datum[s.yKey];
+          return {
+            title: fullToolName,
+            content: `${s.yName}: ${val != null ? val : 0}${valueSuffix}`,
+          };
+        },
+      },
     }));
 
     return {
       theme: chartTheme,
       data,
       series: barSeries,
+      padding: {
+        bottom: 24,
+        left: 12,
+        right: 12,
+        top: 12,
+      },
       legend: {
         enabled: series.length > 1,
         position: 'bottom',
@@ -91,7 +108,13 @@ export function BarChartCard({
               },
             }
           : {
-              x: { type: 'category' },
+              x: {
+                type: 'category',
+                label: {
+                  autoRotate: true,
+                  rotation: 25,
+                },
+              },
               y: {
                 type: 'number',
                 title: yAxisTitle ? { text: yAxisTitle } : undefined,

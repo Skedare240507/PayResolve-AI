@@ -216,11 +216,16 @@ export default function CaseDetailsPage() {
 
   const toolCalls = useMemo(
     () =>
-      (activeInvestigation?.steps || []).map((s, idx) => ({
-        stepLabel: `#${idx + 1} ${s.tool || 'tool'}`,
-        toolName: s.tool || 'toolCall',
-        latencyMs: Number(s.latencyMs ?? 0),
-      })),
+      (activeInvestigation?.steps || []).map((s) => {
+        const rawTool = s.tool || 'tool';
+        // Drop "get" / "list" prefix for concise axis labels
+        const shortName = rawTool.replace(/^get/i, '').replace(/^list/i, '');
+        return {
+          stepLabel: shortName,
+          toolName: rawTool,
+          latencyMs: Number(s.latencyMs ?? 0),
+        };
+      }),
     [activeInvestigation?.steps]
   );
 
@@ -534,8 +539,8 @@ export default function CaseDetailsPage() {
             )}
           </div>
 
-          {/* Right: AI Investigator */}
-          <div className="lg:col-span-5 bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
+          {/* Right: AI Investigator (Sticky) */}
+          <div className="lg:col-span-5 lg:sticky lg:top-4 self-start bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
@@ -582,7 +587,7 @@ export default function CaseDetailsPage() {
                     key={idx}
                     className="px-2.5 py-1 rounded-full border border-blue-400/60 dark:border-blue-700/60 bg-blue-50/40 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1"
                   >
-                    {tc.toolName} {tc.latencyMs} ms
+                    {tc.stepLabel} {tc.latencyMs} ms
                     <InfoTip
                       metricId="case.toolLatency"
                       values={{ customDetail: `${tc.toolName}: ${tc.latencyMs} ms execution latency` }}
@@ -615,10 +620,11 @@ export default function CaseDetailsPage() {
                 data={toolCalls}
                 xKey="stepLabel"
                 xLabel="Tool Step"
-                series={[{ yKey: 'latencyMs', yName: 'Latency (ms)', fill: SEMANTIC_COLORS.primary }]}
-                yAxisTitle="Duration (ms)"
+                direction="horizontal"
+                series={[{ yKey: 'latencyMs', yName: 'Latency', fill: SEMANTIC_COLORS.primary }]}
+                yAxisTitle="ms"
                 valueSuffix=" ms"
-                heightClassName="h-52"
+                heightClassName="h-56"
                 isLoading={latestInvestigationQuery.isLoading || investigateMutation.isPending}
                 emptyMessage="Run an AI investigation to measure real tool-call latencies."
                 lastUpdated={activeInvestigation?.finishedAt || activeInvestigation?.startedAt}
