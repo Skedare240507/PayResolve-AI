@@ -16,6 +16,8 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -44,6 +46,8 @@ class InvestigatorIntegrationTest {
     @DisplayName("POST /api/cases/{id}/investigate runs investigation and returns structured report")
     void shouldRunInvestigationAndReturnReport() throws Exception {
         MvcResult result = mockMvc.perform(post("/api/cases/PR-0142/investigate")
+                .with(user("viewer").roles("VIEWER"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id", startsWith("INV-PR-0142-")))
@@ -58,7 +62,8 @@ class InvestigatorIntegrationTest {
         assertThat(investigationId).isNotBlank();
 
         // Query investigation by ID via GET /api/investigations/{id}
-        mockMvc.perform(get("/api/investigations/" + investigationId))
+        mockMvc.perform(get("/api/investigations/" + investigationId)
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(investigationId))
             .andExpect(jsonPath("$.caseId").value("PR-0142"))
@@ -68,14 +73,17 @@ class InvestigatorIntegrationTest {
     @Test
     @DisplayName("POST /api/cases/{id}/investigate returns 404 for unknown case")
     void shouldReturn404ForUnknownCase() throws Exception {
-        mockMvc.perform(post("/api/cases/PR-NONEXISTENT/investigate"))
+        mockMvc.perform(post("/api/cases/PR-NONEXISTENT/investigate")
+                .with(user("viewer").roles("VIEWER"))
+                .with(csrf()))
             .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("GET /api/investigations/{id} returns 404 for unknown investigation ID")
     void shouldReturn404ForUnknownInvestigation() throws Exception {
-        mockMvc.perform(get("/api/investigations/INV-UNKNOWN-999"))
+        mockMvc.perform(get("/api/investigations/INV-UNKNOWN-999")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isNotFound());
     }
 }

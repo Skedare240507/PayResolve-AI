@@ -19,6 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,6 +42,7 @@ class AuthIntegrationTest {
         LoginRequest request = new LoginRequest("operator", "test_operator_password");
 
         MvcResult result = mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -59,7 +61,7 @@ class AuthIntegrationTest {
             .andExpect(jsonPath("$.role").value("OPERATOR"));
 
         // Logout
-        mockMvc.perform(post("/api/auth/logout").session(session))
+        mockMvc.perform(post("/api/auth/logout").with(csrf()).session(session))
             .andExpect(status().isOk());
     }
 
@@ -69,6 +71,7 @@ class AuthIntegrationTest {
         LoginRequest request = new LoginRequest("operator", "wrong_password");
 
         mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isUnauthorized())
@@ -83,6 +86,7 @@ class AuthIntegrationTest {
         SignUpRequest request = new SignUpRequest(uniqueUser, uniqueUser + "@test.com", "securePass123");
 
         mockMvc.perform(post("/api/auth/signup")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -97,6 +101,7 @@ class AuthIntegrationTest {
         String uniqueUser = "resetuser_" + System.currentTimeMillis();
         SignUpRequest signUp = new SignUpRequest(uniqueUser, uniqueUser + "@test.com", "oldPassword123");
         mockMvc.perform(post("/api/auth/signup")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signUp)))
             .andExpect(status().isOk());
@@ -104,6 +109,7 @@ class AuthIntegrationTest {
         // 1. Request password reset
         ForgotPasswordRequest forgotReq = new ForgotPasswordRequest(uniqueUser);
         MvcResult forgotResult = mockMvc.perform(post("/api/auth/forgot-password")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(forgotReq)))
             .andExpect(status().isOk())
@@ -119,6 +125,7 @@ class AuthIntegrationTest {
         // 2. Reset password
         ResetPasswordRequest resetReq = new ResetPasswordRequest(token, "brandNewPassword123");
         mockMvc.perform(post("/api/auth/reset-password")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(resetReq)))
             .andExpect(status().isOk())
@@ -127,6 +134,7 @@ class AuthIntegrationTest {
         // 3. Verify login works with the new password
         LoginRequest loginNew = new LoginRequest(uniqueUser, "brandNewPassword123");
         mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(loginNew)))
             .andExpect(status().isOk())

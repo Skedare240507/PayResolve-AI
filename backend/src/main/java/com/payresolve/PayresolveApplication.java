@@ -19,6 +19,7 @@ public class PayresolveApplication {
     public static void main(String[] args) {
         System.setProperty("java.net.preferIPv4Stack", "true");
         validateAndConfigureDatasourceFromEnv();
+        configureSessionCookieDefaults();
         runFlywayMigrationIfConfigured();
         for (String arg : args) {
             if ("--migrate-only".equals(arg)) {
@@ -86,6 +87,55 @@ public class PayresolveApplication {
                 throw e;
             } catch (Exception ignored) {}
         }
+    }
+
+    private static void configureSessionCookieDefaults() {
+        String explicitSecure = System.getenv("SESSION_COOKIE_SECURE");
+        if (explicitSecure == null || explicitSecure.isBlank()) {
+            explicitSecure = readEnvFileValue("SESSION_COOKIE_SECURE");
+        }
+        if (explicitSecure != null && !explicitSecure.isBlank()) {
+            System.setProperty("SESSION_COOKIE_SECURE", explicitSecure.trim());
+            return;
+        }
+        String frontendOrigin = System.getenv("FRONTEND_ORIGIN");
+        if (frontendOrigin == null || frontendOrigin.isBlank()) {
+            frontendOrigin = readEnvFileValue("FRONTEND_ORIGIN");
+        }
+        String targetOrigin = (frontendOrigin == null || frontendOrigin.isBlank())
+            ? "http://localhost:5173"
+            : frontendOrigin.trim().toLowerCase();
+        boolean isLocalhost = targetOrigin.startsWith("http://localhost")
+            || targetOrigin.startsWith("http://127.0.0.1")
+            || targetOrigin.startsWith("https://localhost")
+            || targetOrigin.startsWith("https://127.0.0.1");
+        System.setProperty("SESSION_COOKIE_SECURE", isLocalhost ? "false" : "true");
+    }
+
+    private static String readEnvFileValue(String key) {
+        Path envFile = Path.of("../.env");
+        if (!Files.exists(envFile)) {
+            envFile = Path.of(".env");
+        }
+        if (!Files.exists(envFile)) {
+            return null;
+        }
+        String prefix = key + "=";
+        try {
+            for (String rawLine : Files.readAllLines(envFile)) {
+                String line = rawLine.trim();
+                if (line.startsWith(prefix)) {
+                    String val = line.substring(prefix.length()).trim();
+                    if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'"))) {
+                        val = val.substring(1, val.length() - 1);
+                    }
+                    return val;
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
     }
 
     private static void runFlywayMigrationIfConfigured() {

@@ -123,6 +123,9 @@ export const API_BASE = rawBase
   ? (rawBase.startsWith('http') ? rawBase : `https://${rawBase}`).replace(/\/$/, '')
   : '';
 
+let cachedCsrfToken: string | null = null;
+let csrfInFlight: Promise<string | null> | null = null;
+
 /**
  * Extracts a cookie value by name from document.cookie
  */
@@ -132,33 +135,62 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[3]) : null;
 }
 
-export async function fetchCsrfToken(): Promise<string | null> {
-  let token = getCookie('XSRF-TOKEN');
-  if (token) return token;
+export function clearCachedCsrfToken(): void {
+  cachedCsrfToken = null;
+}
 
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/csrf`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.token || getCookie('XSRF-TOKEN');
+export async function fetchCsrfToken(forceRefresh = false): Promise<string | null> {
+  if (!forceRefresh) {
+    const cookieToken = getCookie('XSRF-TOKEN');
+    if (cookieToken) {
+      cachedCsrfToken = cookieToken;
+      return cookieToken;
     }
-  } catch {
-    // ignore
+    if (cachedCsrfToken) {
+      return cachedCsrfToken;
+    }
+  } else {
+    cachedCsrfToken = null;
   }
-  return getCookie('XSRF-TOKEN');
+
+  if (csrfInFlight) {
+    return csrfInFlight;
+  }
+
+  csrfInFlight = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/csrf`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { token?: string };
+        const token = getCookie('XSRF-TOKEN') || data.token || null;
+        cachedCsrfToken = token;
+        return token;
+      }
+    } catch {
+      // ignore
+    } finally {
+      csrfInFlight = null;
+    }
+    const fallback = getCookie('XSRF-TOKEN');
+    cachedCsrfToken = fallback;
+    return fallback;
+  })();
+
+  return csrfInFlight;
 }
 
 /**
- * Base fetcher with credentials, CSRF attachment, and RFC 9457 error handling
+ * Base fetcher with credentials, CSRF attachment, 403 CSRF retry, and RFC 9457 error handling
  */
 export async function fetchApi<T>(
   url: string,
-  options: RequestInit & { skipAuthRedirect?: boolean } = {}
+  options: RequestInit & { skipAuthRedirect?: boolean; _csrfRetried?: boolean } = {}
 ): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
+  const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   const headers = new Headers(options.headers || {});
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -166,8 +198,8 @@ export async function fetchApi<T>(
   }
 
   // Attach CSRF header on state-changing methods
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    const csrf = getCookie('XSRF-TOKEN') || (await fetchCsrfToken());
+  if (isMutating) {
+    const csrf = await fetchCsrfToken(false);
     if (csrf) {
       headers.set('X-XSRF-TOKEN', csrf);
     }
@@ -199,7 +231,7 @@ export async function fetchApi<T>(
     if (!options.skipAuthRedirect && typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       if (
-        !['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/signed-out', '/403'].includes(
+        !['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/signed-out', '/403', '/shop/return', '/shop/cancel'].includes(
           currentPath
         )
       ) {
@@ -209,15 +241,39 @@ export async function fetchApi<T>(
     throw new ApiError(401, message, errorDetail);
   }
 
-  // Handle 403 Forbidden -> redirect to /403
+  // Handle 403 Forbidden: retry once if CSRF token rejection, otherwise redirect to /403
   if (res.status === 403) {
+    let errorDetail: ApiError['problemDetail'] | undefined = undefined;
+    let message = 'Forbidden: insufficient permissions';
+    try {
+      const data = (await res.json()) as ApiError['problemDetail'] & { message?: string };
+      errorDetail = data;
+      if (data?.detail) {
+        message = data.detail;
+      } else if (data?.message) {
+        message = data.message;
+      }
+    } catch {
+      // not JSON
+    }
+
+    const looksLikeCsrfFailure =
+      isMutating &&
+      !options._csrfRetried &&
+      (errorDetail?.type === 'urn:payresolve:csrf-invalid' || /csrf/i.test(message) || !errorDetail?.type);
+
+    if (looksLikeCsrfFailure) {
+      await fetchCsrfToken(true);
+      return fetchApi<T>(url, { ...options, _csrfRetried: true });
+    }
+
     if (!options.skipAuthRedirect && typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       if (currentPath !== '/403') {
         window.location.href = '/403';
       }
     }
-    throw new ApiError(403, 'Forbidden: insufficient permissions');
+    throw new ApiError(403, message, errorDetail);
   }
 
   if (!res.ok) {
@@ -251,19 +307,25 @@ export async function fetchApi<T>(
 export const api = {
   // --- Auth ---
   auth: {
-    login: (req: LoginRequest) =>
-      fetchApi<UserDto>('/api/auth/login', {
+    login: async (req: LoginRequest) => {
+      const user = await fetchApi<UserDto>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(req),
         skipAuthRedirect: true,
-      }),
+      });
+      clearCachedCsrfToken();
+      return user;
+    },
 
-    signup: (req: SignUpRequest) =>
-      fetchApi<UserDto>('/api/auth/signup', {
+    signup: async (req: SignUpRequest) => {
+      const user = await fetchApi<UserDto>('/api/auth/signup', {
         method: 'POST',
         body: JSON.stringify(req),
         skipAuthRedirect: true,
-      }),
+      });
+      clearCachedCsrfToken();
+      return user;
+    },
 
     forgotPassword: (req: ForgotPasswordRequest) =>
       fetchApi<ForgotPasswordResponse>('/api/auth/forgot-password', {
@@ -279,11 +341,16 @@ export const api = {
         skipAuthRedirect: true,
       }),
 
-    logout: () =>
-      fetchApi<{ success: boolean }>('/api/auth/logout', {
-        method: 'POST',
-        skipAuthRedirect: true,
-      }),
+    logout: async () => {
+      try {
+        return await fetchApi<{ success: boolean }>('/api/auth/logout', {
+          method: 'POST',
+          skipAuthRedirect: true,
+        });
+      } finally {
+        clearCachedCsrfToken();
+      }
+    },
 
     me: () =>
       fetchApi<UserDto>('/api/auth/me', {

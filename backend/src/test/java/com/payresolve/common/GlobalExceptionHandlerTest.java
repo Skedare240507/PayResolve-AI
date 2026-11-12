@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,14 +45,14 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should map RestController under /api prefix and return 200 on valid request")
     void shouldMapUnderApiPrefix() throws Exception {
-        mockMvc.perform(get("/api/test-sample/valid-123"))
+        mockMvc.perform(get("/api/test-sample/valid-123").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk());
     }
 
     @Test
     @DisplayName("Should translate ResourceNotFoundException to RFC 9457 404 ProblemDetail")
     void shouldReturn404ProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/test-sample/not-found"))
+        mockMvc.perform(get("/api/test-sample/not-found").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.title").value("Resource Not Found"))
@@ -63,7 +64,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should translate ValidationException to RFC 9457 400 ProblemDetail")
     void shouldReturn400ProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/test-sample/invalid"))
+        mockMvc.perform(get("/api/test-sample/invalid").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.title").value("Validation Failure"))
@@ -74,7 +75,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should translate IllegalStateException to RFC 9457 409 ProblemDetail")
     void shouldReturn409ProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/test-sample/illegal-state"))
+        mockMvc.perform(get("/api/test-sample/illegal-state").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.title").value("Conflict"))

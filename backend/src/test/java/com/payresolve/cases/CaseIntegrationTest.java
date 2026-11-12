@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -33,6 +35,8 @@ class CaseIntegrationTest {
     @DisplayName("Should seed canonical demo cases and verify all 5 discrepancy types exist")
     void shouldSeedCanonicalCasesAndVerifyTypes() throws Exception {
         mockMvc.perform(post("/api/cases/seed")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(greaterThanOrEqualTo(5))))
@@ -46,6 +50,7 @@ class CaseIntegrationTest {
 
         // Verify queue listing contains seeded cases
         mockMvc.perform(get("/api/cases")
+                .with(user("viewer").roles("VIEWER"))
                 .param("page", "0")
                 .param("size", "20"))
             .andExpect(status().isOk())
@@ -59,7 +64,8 @@ class CaseIntegrationTest {
         // Seed to ensure PR-0142 exists
         caseService.seedDemoCases();
 
-        mockMvc.perform(get("/api/cases/PR-0142"))
+        mockMvc.perform(get("/api/cases/PR-0142")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("PR-0142"))
             .andExpect(jsonPath("$.type").value("PAID_NOT_MARKED"))
@@ -70,7 +76,8 @@ class CaseIntegrationTest {
             .andExpect(jsonPath("$.shopOrderId").value("ORD-10482"))
             .andExpect(jsonPath("$.paypalOrderId").value("PP-10482"));
 
-        mockMvc.perform(get("/api/cases/PR-NONEXISTENT"))
+        mockMvc.perform(get("/api/cases/PR-NONEXISTENT")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isNotFound());
     }
 
@@ -81,18 +88,21 @@ class CaseIntegrationTest {
 
         // 1. Filter by status=OPEN
         mockMvc.perform(get("/api/cases")
+                .with(user("viewer").roles("VIEWER"))
                 .param("status", "OPEN"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content[*].status", everyItem(is("Open"))));
 
         // 2. Filter by severity=HIGH
         mockMvc.perform(get("/api/cases")
+                .with(user("viewer").roles("VIEWER"))
                 .param("severity", "HIGH"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content[*].severity", everyItem(is("High"))));
 
         // 3. Search query
         mockMvc.perform(get("/api/cases")
+                .with(user("viewer").roles("VIEWER"))
                 .param("search", "PR-0141"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content", hasSize(1)))
@@ -106,6 +116,8 @@ class CaseIntegrationTest {
 
         // 1. Move PR-0142 to INVESTIGATING
         mockMvc.perform(patch("/api/cases/PR-0142/status")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     { "status": "INVESTIGATING" }
@@ -116,6 +128,8 @@ class CaseIntegrationTest {
 
         // 2. Move PR-0142 to ACTION_PROPOSED
         mockMvc.perform(patch("/api/cases/PR-0142/status")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     { "status": "ACTION_PROPOSED" }
@@ -125,6 +139,8 @@ class CaseIntegrationTest {
 
         // 3. Resolve case
         mockMvc.perform(patch("/api/cases/PR-0142/status")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     { "status": "RESOLVED" }
@@ -178,6 +194,8 @@ class CaseIntegrationTest {
     @DisplayName("Should execute discrepancy detection on demand via POST /api/cases/detect")
     void shouldExecuteDetectionOnDemand() throws Exception {
         mockMvc.perform(post("/api/cases/detect")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.totalEvaluated", greaterThanOrEqualTo(0)))

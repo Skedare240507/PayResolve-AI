@@ -22,6 +22,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -302,7 +304,7 @@ class WebhookIngestIntegrationTest {
         workerService.processBatch(10);
 
         // 1. List events
-        mockMvc.perform(get("/api/events"))
+        mockMvc.perform(get("/api/events").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].eventId").value("WH-INBOX-1"))
                 .andExpect(jsonPath("$[0].type").value("PAYMENT.CAPTURE.COMPLETED"))
@@ -312,14 +314,14 @@ class WebhookIngestIntegrationTest {
                 .andExpect(jsonPath("$[0].attempts[0].statusText").value("handler succeeded"));
 
         // 2. Query single event by PayPal Event ID
-        mockMvc.perform(get("/api/events/WH-INBOX-1"))
+        mockMvc.perform(get("/api/events/WH-INBOX-1").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paypalEventId").value("WH-INBOX-1"))
                 .andExpect(jsonPath("$.status").value("Processed"))
                 .andExpect(jsonPath("$.rawPayload").isNotEmpty());
 
         // 3. Stats query
-        mockMvc.perform(get("/api/events/stats"))
+        mockMvc.perform(get("/api/events/stats").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.received").value(1))
                 .andExpect(jsonPath("$.verified").value(1))
@@ -346,7 +348,9 @@ class WebhookIngestIntegrationTest {
                 .andExpect(status().isOk());
 
         // Replay via endpoint
-        mockMvc.perform(post("/api/events/WH-REPLAY-API/replay"))
+        mockMvc.perform(post("/api/events/WH-REPLAY-API/replay")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("Processed"))
                 .andExpect(jsonPath("$.paypalEventId").value("WH-REPLAY-API"));

@@ -105,6 +105,7 @@ class ActionIntegrationTest {
 
         // 3. Verify audit log contains entries
         mockMvc.perform(get("/api/audit")
+                .with(user("operator").roles("OPERATOR"))
                 .param("page", "0")
                 .param("size", "20"))
             .andExpect(status().isOk())
@@ -123,6 +124,7 @@ class ActionIntegrationTest {
         );
 
         MvcResult result = mockMvc.perform(post("/api/cases/PR-0141/actions")
+                .with(user("operator").roles("OPERATOR"))
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -136,7 +138,8 @@ class ActionIntegrationTest {
         Long actionId = json.get("id").asLong();
 
         // Query actions for case PR-0141
-        mockMvc.perform(get("/api/cases/PR-0141/actions"))
+        mockMvc.perform(get("/api/cases/PR-0141/actions")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[*].id", hasItem(actionId.intValue())));
     }

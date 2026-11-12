@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,7 +27,8 @@ class OpenApiExportTest {
     @Test
     @DisplayName("Export OpenAPI 3 spec from /v3/api-docs to frontend/src/types/openapi.json")
     void exportOpenApiSpec() throws Exception {
-        String json = mockMvc.perform(get("/v3/api-docs"))
+        String json = mockMvc.perform(get("/v3/api-docs")
+                .with(user("operator").roles("OPERATOR")))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

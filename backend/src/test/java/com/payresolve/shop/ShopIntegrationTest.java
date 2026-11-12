@@ -29,6 +29,8 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -93,6 +95,8 @@ class ShopIntegrationTest {
         );
 
         mockMvc.perform(post("/api/shop/orders")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -135,7 +139,9 @@ class ShopIntegrationTest {
         );
         when(payPalOrdersClient.createOrder(eq(order.id()), any(), any(), any())).thenReturn(mockPayPalCreated);
 
-        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/checkout"))
+        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/checkout")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shopOrderId").value(order.id()))
                 .andExpect(jsonPath("$.paypalOrderId").value("PP-ORD-999"))
@@ -153,7 +159,8 @@ class ShopIntegrationTest {
         );
         when(payPalOrdersClient.captureOrder("PP-ORD-999")).thenReturn(mockPayPalCaptured);
 
-        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/capture"))
+        mockMvc.perform(post("/api/shop/orders/" + order.id() + "/capture")
+                .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AWAITING_CONFIRMATION"))
                 .andExpect(jsonPath("$.captureId").value("CAP-999"));
@@ -184,6 +191,8 @@ class ShopIntegrationTest {
         shopOrderService.applyPaymentCapture(order.id(), "CAP-REF-1", Money.parse("22.00", "USD"));
 
         mockMvc.perform(post("/api/shop/orders/" + order.id() + "/refund")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     { "amountMinor": 2200, "reason": "Customer returned item" }
@@ -198,7 +207,8 @@ class ShopIntegrationTest {
         assertThat(refundedOrder.status()).isEqualTo("REFUNDED");
 
         // Query refunds list endpoint
-        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/refunds"))
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/refunds")
+                .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].paymentId").value("CAP-REF-1"))
                 .andExpect(jsonPath("$[0].amountMinor").value(2200));
@@ -214,6 +224,8 @@ class ShopIntegrationTest {
         );
 
         mockMvc.perform(post("/api/shop/orders/" + order.id() + "/shipments")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     { "carrier": "FedEx", "trackingRef": "FX-12345678", "status": "SHIPPED" }
@@ -223,7 +235,8 @@ class ShopIntegrationTest {
                 .andExpect(jsonPath("$.trackingRef").value("FX-12345678"))
                 .andExpect(jsonPath("$.status").value("SHIPPED"));
 
-        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/shipments"))
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/shipments")
+                .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].carrier").value("FedEx"))
                 .andExpect(jsonPath("$[0].status").value("SHIPPED"));
@@ -233,7 +246,8 @@ class ShopIntegrationTest {
     @DisplayName("6. Database-backed fault switches: update, persist to DB, reset, and alter order total")
     void shouldManageDatabaseBackedFaultSwitches() throws Exception {
         // Initial state
-        mockMvc.perform(get("/api/demo/faults"))
+        mockMvc.perform(get("/api/demo/faults")
+                .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failWebhookHandler").value(false))
                 .andExpect(jsonPath("$.dropWebhook").value(false))
@@ -242,6 +256,8 @@ class ShopIntegrationTest {
 
         // Update fault switches
         mockMvc.perform(post("/api/demo/faults")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -273,7 +289,9 @@ class ShopIntegrationTest {
         assertThat(alteredOrder.totalMinor()).isEqualTo(3400L);
 
         // Reset endpoint
-        mockMvc.perform(post("/api/demo/faults/reset"))
+        mockMvc.perform(post("/api/demo/faults/reset")
+                .with(user("operator").roles("OPERATOR"))
+                .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failWebhookHandler").value(false))
                 .andExpect(jsonPath("$.alterOrderTotal").value(false));
@@ -341,7 +359,8 @@ class ShopIntegrationTest {
                 "USD"
         );
 
-        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/trace"))
+        mockMvc.perform(get("/api/shop/orders/" + order.id() + "/trace")
+                .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(order.id()))
                 .andExpect(jsonPath("$.orderStatus").value("PENDING"))
@@ -352,7 +371,8 @@ class ShopIntegrationTest {
                 .andExpect(jsonPath("$.steps[1].timestampLabel").value("not yet"))
                 .andExpect(jsonPath("$.steps[7].id").value("CASE_OPENED"));
 
-        mockMvc.perform(get("/api/shop/orders/ORD-MISSING-999/trace"))
+        mockMvc.perform(get("/api/shop/orders/ORD-MISSING-999/trace")
+                .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isNotFound());
     }
 }

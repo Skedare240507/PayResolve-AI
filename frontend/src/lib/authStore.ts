@@ -139,9 +139,8 @@ export function useAuth() {
         }
       } catch {
         if (isMounted) {
-          // If session is unauthenticated, preserve local cache or clear
-          const cached = getCurrentUser();
-          setUser(cached);
+          setUser(null);
+          setCurrentUser(null);
         }
       } finally {
         if (isMounted) {

@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +37,7 @@ class EvidenceIntegrationTest {
     @DisplayName("GET /api/cases/{id}/graph returns derived evidence graph with missing nodes and dashed edges")
     void shouldReturnDerivedEvidenceGraph() throws Exception {
         mockMvc.perform(get("/api/cases/PR-0142/graph")
+                .with(user("viewer").roles("VIEWER"))
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.caseId").value("PR-0142"))
@@ -52,6 +54,7 @@ class EvidenceIntegrationTest {
     @DisplayName("GET /api/cases/{id}/timeline returns chronological evidence timeline")
     void shouldReturnChronologicalTimeline() throws Exception {
         mockMvc.perform(get("/api/cases/PR-0142/timeline")
+                .with(user("viewer").roles("VIEWER"))
                 .accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.caseId").value("PR-0142"))
@@ -66,14 +69,16 @@ class EvidenceIntegrationTest {
     @Test
     @DisplayName("GET /api/cases/{id}/graph returns 404 for unknown case")
     void shouldReturn404ForUnknownCaseGraph() throws Exception {
-        mockMvc.perform(get("/api/cases/PR-NONEXISTENT/graph"))
+        mockMvc.perform(get("/api/cases/PR-NONEXISTENT/graph")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("GET /api/cases/{id}/timeline returns 404 for unknown case")
     void shouldReturn404ForUnknownCaseTimeline() throws Exception {
-        mockMvc.perform(get("/api/cases/PR-NONEXISTENT/timeline"))
+        mockMvc.perform(get("/api/cases/PR-NONEXISTENT/timeline")
+                .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isNotFound());
     }
 
