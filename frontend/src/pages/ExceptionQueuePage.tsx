@@ -144,6 +144,21 @@ export default function ExceptionQueuePage() {
   const [gridApi, setGridApi] = useState<GridApi<GridCaseRow> | null>(null);
   const { gridTheme } = useGridTheme();
 
+  // Show "Sample data" button only when data in queue is synthetic/demo fixtures or queue is empty
+  const hasSyntheticCases = useMemo(() => {
+    const rawList = pagedData?.content || [];
+    if (rawList.length === 0) return true;
+    return rawList.some((c) =>
+      (c as unknown as Record<string, unknown>).synthetic === true ||
+      (c as unknown as Record<string, unknown>).source === 'SYNTHETIC' ||
+      c.summary?.toLowerCase().includes('synthetic') ||
+      c.summary?.toLowerCase().includes('fixture') ||
+      c.summary?.toLowerCase().includes('sample') ||
+      c.order?.startsWith('#104') ||
+      c.id?.startsWith('PR-01')
+    );
+  }, [pagedData]);
+
   // Map API records to grid rows (real rows only, no mock fallback)
   const rowData: GridCaseRow[] = useMemo(() => {
     const rawList = pagedData?.content || [];
@@ -340,13 +355,15 @@ export default function ExceptionQueuePage() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <LastUpdatedLabel dataUpdatedAt={casesUpdatedAt} isFetching={casesFetching} />
-            <button
-              onClick={() => seedMutation.mutate()}
-              disabled={seedMutation.isPending}
-              className="px-4 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs transition-colors"
-            >
-              {seedMutation.isPending ? 'Seeding...' : 'Sample data'}
-            </button>
+            {hasSyntheticCases && (
+              <button
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isPending}
+                className="px-4 py-2 rounded-lg bg-white dark:bg-[#131b26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs transition-colors"
+              >
+                {seedMutation.isPending ? 'Seeding...' : 'Sample data'}
+              </button>
+            )}
             <button
               onClick={() => detectMutation.mutate()}
               disabled={detectMutation.isPending}
