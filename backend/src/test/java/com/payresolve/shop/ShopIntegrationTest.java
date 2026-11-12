@@ -424,4 +424,14 @@ class ShopIntegrationTest {
                 .with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("9. GET /api/shop/demo-buyer requires auth and returns 404 when buyer credentials are not configured")
+    void demoBuyerRequiresAuthAndReturns404WhenUnconfigured() throws Exception {
+        mockMvc.perform(get("/api/shop/demo-buyer"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/shop/demo-buyer").with(user("viewer").roles("VIEWER")))
+                .andExpect(status().isNotFound());
+    }
 }

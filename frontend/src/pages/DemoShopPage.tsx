@@ -6,6 +6,7 @@ import { InfoTip } from '../components/InfoTip';
 import { LastUpdatedLabel } from '../components/LastUpdatedLabel';
 import { PaymentTraceStepper } from '../components/PaymentTraceStepper';
 import { api, type ProductRecord, type DemoFaultSwitchesRecord } from '../lib/api';
+import { useAuth } from '../lib/authStore';
 import { toast } from '../lib/toast';
 import { CardSkeleton } from '../components/DataStates';
 
@@ -62,11 +63,30 @@ function ToggleSwitch({
 
 export default function DemoShopPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [showBuyerPassword, setShowBuyerPassword] = useState(false);
 
   const [cart, setCart] = useState<{ [id: string]: number }>({
     mug: 1,
     tote: 1,
   });
+
+  // 0. Fetch optional Sandbox test buyer credentials (signed-in users only)
+  const demoBuyerQuery = useQuery({
+    queryKey: ['shop-demo-buyer'],
+    queryFn: api.shop.getDemoBuyer,
+    enabled: Boolean(user),
+    retry: false,
+  });
+
+  const copyText = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`Copied ${label}`);
+    } catch {
+      toast.error(`Unable to copy ${label}`);
+    }
+  };
 
   // 1. Fetch Products
   const { data: productsData, isLoading: productsLoading } = useQuery({
@@ -386,8 +406,71 @@ export default function DemoShopPage() {
             </div>
           </div>
 
-          {/* Right Column: Fault Switches & Recent Orders */}
+          {/* Right Column: Sandbox Test Buyer, Fault Switches & Recent Orders */}
           <div className="lg:col-span-4 space-y-6 w-full">
+
+            {user && demoBuyerQuery.data && (
+              <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-blue-200/80 dark:border-blue-900/70 p-4 sm:p-5 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                      Sandbox test buyer
+                    </h2>
+                    <InfoTip metricId="shop.sandboxTestBuyer" size={14} />
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[10px] font-medium">
+                    Sandbox only
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {demoBuyerQuery.data.note || 'PayPal Sandbox only. Not a real account. Use these to approve the test payment.'}
+                </p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800">
+                    <div className="min-w-0">
+                      <span className="block text-[10px] uppercase tracking-wide text-slate-400">Email</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-200 truncate block">
+                        {demoBuyerQuery.data.email}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyText('sandbox buyer email', demoBuyerQuery.data!.email)}
+                      className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 cursor-pointer shrink-0 flex items-center gap-1"
+                    >
+                      <GoogleIcon name="content_copy" size={12} />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800">
+                    <div className="min-w-0">
+                      <span className="block text-[10px] uppercase tracking-wide text-slate-400">Password</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-200 truncate block">
+                        {showBuyerPassword ? demoBuyerQuery.data.password : '••••••••••••'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowBuyerPassword((v) => !v)}
+                        className="p-1 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                        aria-label={showBuyerPassword ? 'Hide password' : 'Show password'}
+                      >
+                        <GoogleIcon name={showBuyerPassword ? 'visibility_off' : 'visibility'} size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyText('sandbox buyer password', demoBuyerQuery.data!.password)}
+                        className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 cursor-pointer flex items-center gap-1"
+                      >
+                        <GoogleIcon name="content_copy" size={12} />
+                        <span>Copy</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Fault Switches Card */}
             <div className="bg-white dark:bg-[#0e1522] rounded-2xl border border-slate-200/90 dark:border-slate-800/90 p-4 sm:p-6 space-y-5 shadow-2xs">

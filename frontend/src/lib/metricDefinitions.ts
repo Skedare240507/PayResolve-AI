@@ -439,6 +439,16 @@ export const METRIC_REGISTRY = {
     caveats: 'Active only in demo mode; strictly disabled in production environments',
     implementation: 'backend/src/main/java/com/payresolve/shop/DemoFaultSwitchService.java',
   },
+  'shop.sandboxTestBuyer': {
+    id: 'shop.sandboxTestBuyer',
+    label: 'Sandbox Test Buyer Credentials',
+    meaning: 'Optional PayPal Sandbox personal buyer credentials provided for judges to complete a test checkout when logged in.',
+    formula: 'Read from DEMO_BUYER_EMAIL and DEMO_BUYER_PASSWORD when DEMO_MODE is true',
+    source: 'GET /api/shop/demo-buyer (signed-in users only)',
+    window: 'Current demo deployment configuration',
+    caveats: 'Returns 404 when unconfigured or outside demo mode; never exposed to anonymous visitors',
+    implementation: 'backend/src/main/java/com/payresolve/shop/ShopController.java:getDemoBuyer',
+  },
   'shop.trace.orderCreated': {
     id: 'shop.trace.orderCreated',
     label: 'Trace Step 1: Order Created',

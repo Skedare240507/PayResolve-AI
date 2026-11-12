@@ -89,6 +89,12 @@ export type ShopShipmentRecord = components['schemas']['ShipmentResponseDto'];
 export type ShipmentResponseDto = components['schemas']['ShipmentResponseDto'];
 export type OrderTraceDto = components['schemas']['OrderTraceDto'];
 export type OrderTraceStepDto = components['schemas']['OrderTraceStepDto'];
+export interface DemoBuyerDto {
+  email: string;
+  password: string;
+  note: string;
+}
+
 export interface BuyerOrderStatusDto {
   status: string;
   amountMinor: number;
@@ -566,6 +572,9 @@ export const api = {
   // --- Demo Shop ---
   shop: {
     getProducts: () => fetchApi<ProductDto[]>('/api/shop/products'),
+
+    getDemoBuyer: () =>
+      fetchApi<DemoBuyerDto>('/api/shop/demo-buyer', { skipAuthRedirect: true }),
 
     getOrders: () => fetchApi<ShopOrderDto[]>('/api/shop/orders'),
 

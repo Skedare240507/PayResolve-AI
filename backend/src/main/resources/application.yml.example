@@ -86,6 +86,9 @@ payresolve:
   public-url: ${APP_PUBLIC_URL:http://localhost:8080}
   frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
   demo-mode: ${DEMO_MODE:true}
+  demo:
+    buyer-email: ${DEMO_BUYER_EMAIL:}
+    buyer-password: ${DEMO_BUYER_PASSWORD:}
   session-timeout: ${SESSION_TIMEOUT:30m}
   cors:
     allowed-origins: ${FRONTEND_ORIGIN:http://localhost:5173}

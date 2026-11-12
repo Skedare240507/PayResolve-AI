@@ -4,6 +4,7 @@ import com.payresolve.common.ResourceNotFoundException;
 import com.payresolve.shop.dto.BuyerOrderStatusDto;
 import com.payresolve.shop.dto.CheckoutResponseDto;
 import com.payresolve.shop.dto.CreateShopOrderRequest;
+import com.payresolve.shop.dto.DemoBuyerDto;
 import com.payresolve.shop.dto.OrderTraceDto;
 import com.payresolve.shop.dto.ProductDto;
 import com.payresolve.shop.dto.RefundRequestDto;
@@ -14,6 +15,7 @@ import com.payresolve.shop.dto.ShopOrderDto;
 import com.payresolve.shop.dto.ShopOrderItemDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,12 +35,42 @@ import java.util.List;
 @Tag(name = "Demo Shop", description = "Storefront catalog, checkout, order lifecycle, refunds, and shipments")
 public class ShopController {
 
+    private static final String SANDBOX_BUYER_NOTE =
+        "PayPal Sandbox only. Not a real account. Use these to approve the test payment.";
+
     private final ShopOrderService shopOrderService;
     private final OrderTraceService orderTraceService;
+    private final boolean demoMode;
+    private final String demoBuyerEmail;
+    private final String demoBuyerPassword;
 
-    public ShopController(ShopOrderService shopOrderService, OrderTraceService orderTraceService) {
+    public ShopController(
+        ShopOrderService shopOrderService,
+        OrderTraceService orderTraceService,
+        @Value("${payresolve.demo-mode:false}") boolean demoMode,
+        @Value("${payresolve.demo.buyer-email:}") String demoBuyerEmail,
+        @Value("${payresolve.demo.buyer-password:}") String demoBuyerPassword
+    ) {
         this.shopOrderService = shopOrderService;
         this.orderTraceService = orderTraceService;
+        this.demoMode = demoMode;
+        this.demoBuyerEmail = demoBuyerEmail;
+        this.demoBuyerPassword = demoBuyerPassword;
+    }
+
+    @GetMapping("/demo-buyer")
+    @Operation(summary = "Retrieve Sandbox test buyer credentials (signed-in users only, demo mode with env configured)")
+    public ResponseEntity<DemoBuyerDto> getDemoBuyer() {
+        if (!demoMode
+            || demoBuyerEmail == null || demoBuyerEmail.isBlank()
+            || demoBuyerPassword == null || demoBuyerPassword.isBlank()) {
+            throw new ResourceNotFoundException("Sandbox demo buyer credentials are not configured.");
+        }
+        return ResponseEntity.ok(new DemoBuyerDto(
+            demoBuyerEmail.trim(),
+            demoBuyerPassword,
+            SANDBOX_BUYER_NOTE
+        ));
     }
 
     // =========================================================================
