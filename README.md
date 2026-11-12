@@ -53,7 +53,7 @@ We did not run interviews or surveys for this project. The problem comes from Pa
 ### 1. Get the code
 
 ```bash
-git clone https://github.com/Rohan45create/PayResolve-AI.git
+git clone https://github.com/Skedare240507/PayResolve-AI.git
 cd PayResolve-AI
 ```
 
