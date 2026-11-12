@@ -43,7 +43,9 @@ public class AuthService {
     private final AuditService auditService;
     private final AuthProperties authProperties;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
     private final Clock clock;
+    private final String dummyPasswordHash;
 
     public AuthService(
         UserRepository userRepository,
@@ -51,6 +53,7 @@ public class AuthService {
         AuditService auditService,
         AuthProperties authProperties,
         PasswordEncoder passwordEncoder,
+        LoginAttemptService loginAttemptService,
         Clock clock
     ) {
         this.userRepository = userRepository;
@@ -58,7 +61,9 @@ public class AuthService {
         this.auditService = auditService;
         this.authProperties = authProperties;
         this.passwordEncoder = passwordEncoder;
+        this.loginAttemptService = loginAttemptService;
         this.clock = clock;
+        this.dummyPasswordHash = passwordEncoder.encode("payresolve-dummy-timing-guard");
     }
 
     /**
@@ -139,16 +144,39 @@ public class AuthService {
     }
 
     /**
-     * Authenticates credentials, creates a session, and attaches the SecurityContext.
+     * Authenticates credentials, enforces per-username 5-failure lockout (15m) with uniform timing
+     * and error message, creates a session, and attaches the SecurityContext.
      */
     public UserDto login(String username, String password, HttpServletRequest request) {
-        UserRecord user = userRepository.findByUsername(username)
-            .or(() -> userRepository.findByEmail(username))
-            .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+        String identifier = username == null ? "" : username.trim();
+        Optional<UserRecord> userOpt = userRepository.findByUsername(identifier)
+            .or(() -> userRepository.findByEmail(identifier));
 
-        if (!passwordEncoder.matches(password, user.passwordHash())) {
+        String lockoutKey = userOpt.map(UserRecord::username).orElse(identifier);
+
+        // Enforce 15-minute lockout with uniform BCrypt work & uniform error message
+        if (loginAttemptService.isLocked(identifier) || loginAttemptService.isLocked(lockoutKey)) {
+            passwordEncoder.matches(password != null ? password : "", dummyPasswordHash);
             throw new BadCredentialsException("Invalid username or password");
         }
+
+        if (userOpt.isEmpty()) {
+            passwordEncoder.matches(password != null ? password : "", dummyPasswordHash);
+            loginAttemptService.recordFailure(identifier);
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        UserRecord user = userOpt.get();
+        if (!passwordEncoder.matches(password, user.passwordHash())) {
+            loginAttemptService.recordFailure(user.username());
+            if (!identifier.equalsIgnoreCase(user.username())) {
+                loginAttemptService.recordFailure(identifier);
+            }
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        loginAttemptService.clearFailures(user.username());
+        loginAttemptService.clearFailures(identifier);
 
         String roleAuthority = "ROLE_" + user.role().toUpperCase();
         var authorities = List.of(new SimpleGrantedAuthority(roleAuthority));

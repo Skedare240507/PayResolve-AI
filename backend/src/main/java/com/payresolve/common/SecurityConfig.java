@@ -16,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfException;
@@ -45,13 +46,16 @@ public class SecurityConfig {
 
     private final String allowedOrigins;
     private final ObjectMapper objectMapper;
+    private final RateLimitService rateLimitService;
 
     public SecurityConfig(
         @Value("${payresolve.cors.allowed-origins:http://localhost:5173}") String allowedOrigins,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        RateLimitService rateLimitService
     ) {
         this.allowedOrigins = allowedOrigins;
         this.objectMapper = objectMapper;
+        this.rateLimitService = rateLimitService;
     }
 
     @Bean
@@ -107,7 +111,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/**").hasRole("OPERATOR")
                 .requestMatchers(HttpMethod.DELETE, "/**").hasRole("OPERATOR")
                 .anyRequest().authenticated()
-            );
+            )
+            .addFilterAfter(new RateAndPayloadFilter(rateLimitService, objectMapper), AuthorizationFilter.class);
 
         return http.build();
     }

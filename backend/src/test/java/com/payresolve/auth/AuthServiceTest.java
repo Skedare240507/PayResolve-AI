@@ -59,6 +59,7 @@ class AuthServiceTest {
             auditService,
             authProperties,
             passwordEncoder,
+            new LoginAttemptService(clock),
             clock
         );
     }
