@@ -91,6 +91,8 @@ class InvestigationVerifierTest {
         assertThat(verified.confirmed()).hasSize(1);
         assertThat(verified.confirmed().get(0).statement()).contains("$84.50");
         assertThat(verified.confirmed().get(0).evidenceIds()).containsExactlyInAnyOrder("PP-10482", "ORD-10482");
+        assertThat(verified.verifiedCitations()).isEqualTo(4);
+        assertThat(verified.totalCitations()).isEqualTo(4);
     }
 
     @Test

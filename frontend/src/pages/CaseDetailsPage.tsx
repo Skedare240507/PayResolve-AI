@@ -227,6 +227,84 @@ export default function CaseDetailsPage() {
   // Investigation report: prefer persisted/live report; show real status notice if not yet run
   const report = activeInvestigation?.report;
 
+  const formatProviderLabel = (raw?: string | null) => {
+    if (!raw) return 'AI Model';
+    const lower = raw.toLowerCase();
+    if (lower === 'groq') return 'Groq';
+    if (lower === 'gemini') return 'Gemini';
+    return raw;
+  };
+
+  const effectiveLlmCall = llmCalls.find((c) => c.status !== 'FAILED') ?? llmCalls[0];
+  const isRuleBased = Boolean(
+    activeInvestigation &&
+      (activeInvestigation.providerMode === 'RULE_BASED' ||
+        activeInvestigation.provider === 'rule_fallback' ||
+        activeInvestigation.status === 'DEGRADED' ||
+        report?.degraded ||
+        effectiveLlmCall?.provider === 'rule_fallback')
+  );
+
+  const verifiedCitations = activeInvestigation?.verifiedCitations ?? report?.verifiedCitations;
+  const totalCitations = activeInvestigation?.totalCitations ?? report?.totalCitations;
+  const citationsBadgeText = !report && !activeInvestigation
+    ? 'Awaiting AI run'
+    : isRuleBased
+    ? 'Not verified'
+    : typeof verifiedCitations === 'number' && typeof totalCitations === 'number'
+    ? `${verifiedCitations} of ${totalCitations} citations verified`
+    : 'Citations verified';
+
+  const providerBanner = (() => {
+    if (!activeInvestigation && !effectiveLlmCall) return null;
+    if (isRuleBased) {
+      const reason =
+        activeInvestigation?.fallbackReason ||
+        effectiveLlmCall?.fallbackReason ||
+        'All LLM providers unavailable';
+      return {
+        tone: 'rule' as const,
+        label: `Rule-based (AI unavailable: ${reason})`,
+        metrics: 'No LLM call',
+      };
+    }
+
+    const providerKey = activeInvestigation?.provider || effectiveLlmCall?.provider;
+    const displayProvider = formatProviderLabel(providerKey);
+    const modelLabel =
+      effectiveLlmCall?.model ||
+      activeInvestigation?.model?.replace(/^(groq|gemini)\s*\((.*)\)$/i, '$2') ||
+      'unknown model';
+    const isFallback =
+      activeInvestigation?.providerMode === 'FALLBACK' || Boolean(effectiveLlmCall?.fallbackUsed);
+    const fallbackReason =
+      activeInvestigation?.fallbackReason || effectiveLlmCall?.fallbackReason || 'primary failed';
+    const latency = activeInvestigation?.latencyMs ?? effectiveLlmCall?.latencyMs;
+    const inTokens = activeInvestigation?.promptTokens ?? effectiveLlmCall?.promptTokens;
+    const outTokens = activeInvestigation?.completionTokens ?? effectiveLlmCall?.completionTokens;
+
+    const metrics =
+      typeof latency === 'number' && latency > 0
+        ? `${latency} ms · ${inTokens ?? 0} in / ${outTokens ?? 0} out`
+        : typeof inTokens === 'number' || typeof outTokens === 'number'
+        ? `${inTokens ?? 0} in / ${outTokens ?? 0} out`
+        : 'Completed';
+
+    if (isFallback) {
+      return {
+        tone: 'fallback' as const,
+        label: `Fallback: ${displayProvider} (${fallbackReason}) · ${modelLabel}`,
+        metrics,
+      };
+    }
+
+    return {
+      tone: 'primary' as const,
+      label: `${displayProvider}: ${modelLabel}`,
+      metrics,
+    };
+  })();
+
   if (caseLoading) {
     return (
       <AppLayout>
@@ -450,33 +528,36 @@ export default function CaseDetailsPage() {
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">AI investigator</h2>
                 <InfoTip metricId="case.investigationStatus" />
               </div>
-              <span className="px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal inline-flex items-center gap-1">
-                {report?.status === 'DEGRADED'
-                ? 'Degraded rule fallback'
-                : report
-                ? 'Citations verified'
-                : 'Awaiting AI run'}
+              <span
+                className={
+                  isRuleBased
+                    ? 'px-3 py-0.5 rounded-full border border-amber-500/50 bg-amber-50/60 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 text-xs font-normal inline-flex items-center gap-1'
+                    : 'px-3 py-0.5 rounded-full border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-xs font-normal inline-flex items-center gap-1'
+                }
+              >
+                {citationsBadgeText}
                 <InfoTip metricId="case.citationsVerified" size={13} />
               </span>
             </div>
 
-            {/* Tool Calls Row */}
-            {llmCalls.length > 0 && (
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
-                <div className="flex items-center space-x-1.5 font-mono">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {llmCalls[0].provider.toUpperCase()}: {llmCalls[0].model}
+            {/* AI Provider Execution Chip */}
+            {providerBanner && (
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-[#131b26] border border-slate-200/70 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
+                <div className="flex items-center space-x-1.5 font-mono min-w-0">
+                  <span
+                    className={
+                      providerBanner.tone === 'primary'
+                        ? 'w-2 h-2 rounded-full bg-emerald-500 shrink-0'
+                        : 'w-2 h-2 rounded-full bg-amber-500 shrink-0'
+                    }
+                  />
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 break-words">
+                    {providerBanner.label}
                   </span>
-                  {llmCalls[0].fallbackUsed && (
-                    <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-[10px]">
-                      fallback
-                    </span>
-                  )}
                   <InfoTip metricId="case.providerChip" size={13} />
                 </div>
-                <div className="font-mono text-slate-500 dark:text-slate-400">
-                  {llmCalls[0].latencyMs} ms &middot; {llmCalls[0].promptTokens ?? 0} in / {llmCalls[0].completionTokens ?? 0} out
+                <div className="font-mono text-slate-500 dark:text-slate-400 shrink-0">
+                  {providerBanner.metrics}
                 </div>
               </div>
             )}

@@ -100,7 +100,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Capture an approved PayPal order server-side (transitions to AWAITING_CONFIRMATION) */
+        /** Capture an approved PayPal order server-side using the buyer return token */
         post: operations["captureOrder"];
         delete?: never;
         options?: never;
@@ -135,7 +135,7 @@ export interface paths {
         /** Get current demo fault switches state */
         get: operations["getFaults"];
         put?: never;
-        /** Update demo fault switches */
+        /** Update demo fault switches (auto-resets 10 minutes after activation) */
         post: operations["updateFaults"];
         delete?: never;
         options?: never;
@@ -502,6 +502,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shop/orders/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public minimal buyer return status endpoint gated by the PayPal order token */
+        get: operations["getBuyerStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shop/orders/{id}/refunds": {
         parameters: {
             query?: never;
@@ -511,6 +528,23 @@ export interface paths {
         };
         /** List refunds for a shop order */
         get: operations["getRefunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shop/demo-buyer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve Sandbox test buyer credentials (signed-in users only, demo mode with env configured) */
+        get: operations["getDemoBuyer"];
         put?: never;
         post?: never;
         delete?: never;
@@ -723,6 +757,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cases/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve live queue counts and duplicates-blocked KPI */
+        get: operations["getQueueStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmark/latest": {
         parameters: {
             query?: never;
@@ -908,15 +959,25 @@ export interface components {
             totalMinor?: number;
             currency?: string;
         };
-        CaptureOrderResponseDto: {
-            shopOrderId?: string;
-            paypalOrderId?: string;
-            captureId?: string;
+        BuyerOrderStatusDto: {
             status?: string;
             /** Format: int64 */
-            amountCapturedMinor?: number;
+            amountMinor?: number;
             currency?: string;
-            message?: string;
+            amount?: string;
+            steps?: components["schemas"]["OrderTraceStepDto"][];
+        };
+        OrderTraceStepDto: {
+            id?: string;
+            label?: string;
+            status?: string;
+            completed?: boolean;
+            /** Format: date-time */
+            timestamp?: string;
+            timestampLabel?: string;
+            detail?: string;
+            externalRef?: string;
+            explanation?: string;
         };
         EventAttemptDto: {
             label?: string;
@@ -951,6 +1012,9 @@ export interface components {
             duplicateDelivery?: boolean;
             alterOrderTotal?: boolean;
             demoMode?: boolean;
+            /** Format: date-time */
+            resetsAt?: string;
+            activeFaultNames?: string[];
         };
         ConfirmedFact: {
             statement?: string;
@@ -968,6 +1032,10 @@ export interface components {
             recommendedAction?: components["schemas"]["RecommendedAction"];
             degraded?: boolean;
             explanation?: string;
+            /** Format: int32 */
+            verifiedCitations?: number;
+            /** Format: int32 */
+            totalCitations?: number;
         };
         InvestigationResponseDto: {
             id?: string;
@@ -980,6 +1048,19 @@ export interface components {
             /** Format: date-time */
             finishedAt?: string;
             steps?: components["schemas"]["InvestigationStepDto"][];
+            /** Format: int32 */
+            verifiedCitations?: number;
+            /** Format: int32 */
+            totalCitations?: number;
+            provider?: string;
+            providerMode?: string;
+            fallbackReason?: string;
+            /** Format: int64 */
+            latencyMs?: number;
+            /** Format: int32 */
+            promptTokens?: number;
+            /** Format: int32 */
+            completionTokens?: number;
         };
         InvestigationStepDto: {
             /** Format: int64 */
@@ -1261,17 +1342,10 @@ export interface components {
             generatedAt?: string;
             steps?: components["schemas"]["OrderTraceStepDto"][];
         };
-        OrderTraceStepDto: {
-            id?: string;
-            label?: string;
-            status?: string;
-            completed?: boolean;
-            /** Format: date-time */
-            timestamp?: string;
-            timestampLabel?: string;
-            detail?: string;
-            externalRef?: string;
-            explanation?: string;
+        DemoBuyerDto: {
+            email?: string;
+            password?: string;
+            note?: string;
         };
         DiagnosticCheckDto: {
             id?: string;
@@ -1387,6 +1461,28 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        CaseQueueStatsDto: {
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            open?: number;
+            /** Format: int64 */
+            investigating?: number;
+            /** Format: int64 */
+            actionProposed?: number;
+            /** Format: int64 */
+            resolved?: number;
+            /** Format: int64 */
+            dismissed?: number;
+            /** Format: int64 */
+            openCount?: number;
+            /** Format: int64 */
+            awaitingApprovalCount?: number;
+            /** Format: int64 */
+            duplicatesBlockedToday?: number;
+            /** Format: int64 */
+            oldestOpenMinutes?: number;
+        };
         AuditLogEntryDto: {
             /** Format: int64 */
             id?: number;
@@ -1478,9 +1574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: Record<string, never>;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Invalid request parameters or payload */
@@ -1743,10 +1837,7 @@ export interface operations {
     };
     initiateCheckout: {
         parameters: {
-            query?: {
-                returnUrl?: string;
-                cancelUrl?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
@@ -1795,7 +1886,9 @@ export interface operations {
     };
     captureOrder: {
         parameters: {
-            query?: never;
+            query: {
+                token: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -1810,7 +1903,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CaptureOrderResponseDto"];
+                    "application/json": components["schemas"]["BuyerOrderStatusDto"];
                 };
             };
             /** @description Invalid request parameters or payload */
@@ -3060,6 +3153,57 @@ export interface operations {
             };
         };
     };
+    getBuyerStatus: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuyerOrderStatusDto"];
+                };
+            };
+            /** @description Invalid request parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Requested resource was not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Unexpected internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     getRefunds: {
         parameters: {
             query?: never;
@@ -3091,6 +3235,44 @@ export interface operations {
             };
             /** @description Requested resource was not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Unexpected internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    getDemoBuyer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoBuyerDto"];
+                };
+            };
+            /** @description Invalid request parameters or payload */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3641,6 +3823,44 @@ export interface operations {
             };
             /** @description Requested resource was not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Unexpected internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    getQueueStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseQueueStatsDto"];
+                };
+            };
+            /** @description Invalid request parameters or payload */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

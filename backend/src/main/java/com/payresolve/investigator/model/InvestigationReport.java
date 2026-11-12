@@ -17,8 +17,22 @@ public record InvestigationReport(
     @JsonProperty("missing") List<MissingItem> missing,
     @JsonProperty("recommendedAction") RecommendedAction recommendedAction,
     @JsonProperty("degraded") Boolean degraded,
-    @JsonProperty("explanation") String explanation
+    @JsonProperty("explanation") String explanation,
+    @JsonProperty("verifiedCitations") Integer verifiedCitations,
+    @JsonProperty("totalCitations") Integer totalCitations
 ) {
+    public InvestigationReport(
+        String status,
+        List<ConfirmedFact> confirmed,
+        List<ConflictFact> conflicts,
+        List<MissingItem> missing,
+        RecommendedAction recommendedAction,
+        Boolean degraded,
+        String explanation
+    ) {
+        this(status, confirmed, conflicts, missing, recommendedAction, degraded, explanation, null, null);
+    }
+
     public InvestigationReport {
         confirmed = confirmed != null ? List.copyOf(confirmed) : List.of();
         conflicts = conflicts != null ? List.copyOf(conflicts) : List.of();
@@ -77,4 +91,3 @@ public record InvestigationReport(
         }
     }
 }
-

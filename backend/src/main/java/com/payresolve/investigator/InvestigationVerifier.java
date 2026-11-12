@@ -65,11 +65,16 @@ public class InvestigationVerifier {
 
         List<ConfirmedFact> verifiedConfirmed = new ArrayList<>();
         int droppedConfirmedCount = 0;
+        int totalCitations = 0;
+        int verifiedCitations = 0;
 
         for (ConfirmedFact fact : rawReport.confirmed()) {
+            int attempted = fact.evidenceIds().size();
+            totalCitations += attempted;
             VerificationResult vr = verifyStatement(fact.statement(), fact.evidenceIds(), validIds, validAmountsMinor);
             if (vr.isValid()) {
                 verifiedConfirmed.add(new ConfirmedFact(vr.statement(), vr.sanitizedIds()));
+                verifiedCitations += vr.sanitizedIds().size();
             } else {
                 log.warn("Dropping unverified confirmed statement: '{}' (reason: {})", fact.statement(), vr.rejectionReason());
                 droppedConfirmedCount++;
@@ -78,9 +83,12 @@ public class InvestigationVerifier {
 
         List<ConflictFact> verifiedConflicts = new ArrayList<>();
         for (ConflictFact conflict : rawReport.conflicts()) {
+            int attempted = conflict.evidenceIds().size();
+            totalCitations += attempted;
             VerificationResult vr = verifyStatement(conflict.statement(), conflict.evidenceIds(), validIds, validAmountsMinor);
             if (vr.isValid()) {
                 verifiedConflicts.add(new ConflictFact(vr.statement(), vr.sanitizedIds()));
+                verifiedCitations += vr.sanitizedIds().size();
             } else {
                 log.warn("Dropping unverified conflict statement: '{}' (reason: {})", conflict.statement(), vr.rejectionReason());
             }
@@ -88,7 +96,9 @@ public class InvestigationVerifier {
 
         RecommendedAction verifiedAction = rawReport.recommendedAction();
         if (verifiedAction != null) {
+            totalCitations += verifiedAction.evidenceIds().size();
             List<String> validActionIds = filterValidIds(verifiedAction.evidenceIds(), validIds);
+            verifiedCitations += validActionIds.size();
             verifiedAction = new RecommendedAction(
                 verifiedAction.type() != null ? verifiedAction.type() : "NONE",
                 verifiedAction.rationale(),
@@ -111,7 +121,9 @@ public class InvestigationVerifier {
             rawReport.missing(),
             verifiedAction,
             isDegraded,
-            rawReport.explanation()
+            rawReport.explanation(),
+            isDegraded ? 0 : verifiedCitations,
+            totalCitations
         );
     }
 

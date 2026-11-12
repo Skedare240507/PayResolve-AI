@@ -306,11 +306,11 @@ export const METRIC_REGISTRY = {
   'case.citationsVerified': {
     id: 'case.citationsVerified',
     label: 'Citations Verified Badge',
-    meaning: 'Count of factual statements in the AI explanation whose cited entity IDs were verified against the cryptographic evidence graph.',
-    formula: 'Verified citations / Total cited evidence entities in investigation report',
-    source: 'GET /api/cases/{id}/investigations/latest, field citationsVerified',
+    meaning: 'Count of cited evidence IDs verified against known database, PayPal, and webhook records, or Not verified if no AI model answered.',
+    formula: 'Verified citations / Total cited IDs when an AI model responded, or Not verified when rule fallback ran',
+    source: 'GET /api/cases/{id}/investigations/latest, fields verifiedCitations and totalCitations',
     window: 'Latest AI investigation run',
-    caveats: 'Statements citing non-existent IDs are stripped or flagged by the deterministic verifier',
+    caveats: 'Statements citing non-existent IDs or mismatched dollar amounts are dropped by the deterministic verifier',
     implementation: 'backend/src/main/java/com/payresolve/investigator/InvestigationVerifier.java:verify',
   },
   'case.toolLatency': {
@@ -335,11 +335,11 @@ export const METRIC_REGISTRY = {
   'case.providerChip': {
     id: 'case.providerChip',
     label: 'AI Model Provider',
-    meaning: 'Identifies the language model engine that executed the investigation tools, and indicates when offline deterministic fallback was used.',
-    formula: 'Returns active provider (e.g. Gemini 2.0 Flash) or Offline Rule Fallback if API was unavailable',
-    source: 'GET /api/cases/{id}/investigations/latest, field provider',
+    meaning: 'Identifies which model answered (Groq primary, Gemini fallback with primary error reason) or states Rule-based when no model was reachable.',
+    formula: 'Derived from LlmRouter execution status: PRIMARY, FALLBACK (with primary error class), or RULE_BASED (no LLM call)',
+    source: 'GET /api/cases/{id}/investigations/latest, fields providerMode, provider, model, latencyMs, promptTokens, completionTokens',
     window: 'Latest investigation run',
-    implementation: 'backend/src/main/java/com/payresolve/investigator/InvestigatorService.java:investigate',
+    implementation: 'backend/src/main/java/com/payresolve/ai/LlmRouter.java:routeTextInvestigation',
   },
   'case.graphLegend': {
     id: 'case.graphLegend',

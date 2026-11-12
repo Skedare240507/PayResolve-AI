@@ -23,7 +23,7 @@ spring:
         api-key: dummy-test-api-key
         chat:
           options:
-            model: gemini-2.0-flash
+            model: gemini-3.5-flash
           enabled: false
 
 server:
@@ -78,11 +78,12 @@ payresolve:
     provider: rules
     groq:
       api-key: ""
-      model: llama-3.3-70b-versatile
+      model: openai/gpt-oss-120b
       base-url: http://localhost:8089
     gemini:
       api-key: ""
-      model: gemini-2.0-flash
+      model: gemini-3.5-flash
+      base-url: http://localhost:8089
   auth:
     operator-username: operator
     operator-password: test_operator_password

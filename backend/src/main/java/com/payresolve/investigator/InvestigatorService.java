@@ -60,6 +60,7 @@ public class InvestigatorService {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final com.payresolve.ai.LlmRouter llmRouter;
+    private final com.payresolve.ai.LlmCallRepository llmCallRepository;
 
     @Autowired(required = false)
     private ChatModel chatModel;
@@ -67,7 +68,7 @@ public class InvestigatorService {
     @Autowired(required = false)
     private ChatClient.Builder chatClientBuilder;
 
-    @Value("${spring.ai.google.genai.chat.options.model:gemini-2.0-flash}")
+    @Value("${spring.ai.google.genai.chat.options.model:gemini-3.5-flash}")
     private String modelName;
 
     private final ConcurrentHashMap<String, InvestigationReport> seededDemoCache = new ConcurrentHashMap<>();
@@ -89,7 +90,8 @@ public class InvestigatorService {
         InvestigationVerifier verifier,
         Clock clock,
         ObjectMapper objectMapper,
-        @Autowired(required = false) com.payresolve.ai.LlmRouter llmRouter
+        @Autowired(required = false) com.payresolve.ai.LlmRouter llmRouter,
+        @Autowired(required = false) com.payresolve.ai.LlmCallRepository llmCallRepository
     ) {
         this.caseService = caseService;
         this.evidenceService = evidenceService;
@@ -103,6 +105,38 @@ public class InvestigatorService {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.llmRouter = llmRouter;
+        this.llmCallRepository = llmCallRepository;
+    }
+
+    public InvestigatorService(
+        CaseService caseService,
+        EvidenceService evidenceService,
+        CaseEvidenceRepository caseEvidenceRepository,
+        ShopOrderService shopOrderService,
+        WebhookEventRepository webhookEventRepository,
+        InvestigationRepository investigationRepository,
+        InvestigationStepRepository stepRepository,
+        InvestigatorTools investigatorTools,
+        InvestigationVerifier verifier,
+        Clock clock,
+        ObjectMapper objectMapper,
+        com.payresolve.ai.LlmRouter llmRouter
+    ) {
+        this(
+            caseService,
+            evidenceService,
+            caseEvidenceRepository,
+            shopOrderService,
+            webhookEventRepository,
+            investigationRepository,
+            stepRepository,
+            investigatorTools,
+            verifier,
+            clock,
+            objectMapper,
+            llmRouter,
+            null
+        );
     }
 
     public InvestigatorService(
@@ -130,6 +164,7 @@ public class InvestigatorService {
             verifier,
             clock,
             objectMapper,
+            null,
             null
         );
     }
@@ -183,19 +218,28 @@ public class InvestigatorService {
 
         // Set ThreadLocal context for auditable tool logging
         InvestigationContext.setCurrentInvestigationId(investigationId);
-        investigatorTools.resetStepCounter(investigationId);
+        if (investigatorTools != null) {
+            investigatorTools.resetStepCounter(investigationId);
+        }
 
         String snapshotHash = com.payresolve.ai.LlmRouter.computeSnapshotHash(
             caseId + ":" + caseRecord.type() + ":" + caseRecord.status() + ":" + caseRecord.amountMinor() + ":" + caseRecord.summary()
         );
 
         InvestigationReport report = null;
-        String activeModel = "rules";
+        String activeModel = "rule_fallback (deterministic-rules)";
+        String provider = com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER;
+        String providerMode = "RULE_BASED";
+        String fallbackReason = "All LLM providers unconfigured";
+        Long latencyMs = null;
+        Integer promptTokens = null;
+        Integer completionTokens = null;
         boolean degraded = false;
 
         try {
+            String gatheredEvidencePrompt = gatherToolEvidenceContext(caseRecord);
             if (llmRouter != null) {
-                String prompt = buildUserPrompt(caseRecord);
+                String prompt = buildUserPrompt(caseRecord) + gatheredEvidencePrompt;
                 com.payresolve.ai.LlmResponse llmResp = llmRouter.routeTextInvestigation(
                     caseId,
                     systemPromptText,
@@ -206,20 +250,37 @@ public class InvestigatorService {
 
                 if (llmResp != null && llmResp.content() != null && !llmResp.content().isBlank()) {
                     try {
-                        report = parseReport(llmResp.content());
-                        activeModel = llmResp.provider() + " (" + llmResp.model() + ")";
-                        degraded = llmResp.fallbackUsed() && "rule_fallback".equalsIgnoreCase(llmResp.provider());
+                        InvestigationReport parsed = parseReportStrict(llmResp.content());
+                        if (parsed != null) {
+                            report = parsed;
+                            provider = llmResp.provider();
+                            providerMode = llmResp.fallbackUsed() ? "FALLBACK" : "PRIMARY";
+                            fallbackReason = llmResp.fallbackReason();
+                            latencyMs = llmResp.latencyMs();
+                            promptTokens = llmResp.promptTokens();
+                            completionTokens = llmResp.completionTokens();
+                            activeModel = llmResp.provider() + " (" + llmResp.model() + ")";
+                            degraded = com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER.equalsIgnoreCase(llmResp.provider());
+                        }
                     } catch (Exception parseEx) {
+                        fallbackReason = "Invalid JSON response from " + llmResp.provider() + ": " + parseEx.getClass().getSimpleName();
                         log.warn("Failed to parse LLM response for case {}: {}", caseId, parseEx.getMessage());
                     }
-                } else if (llmResp != null && llmResp.fallbackUsed()) {
+                } else if (llmResp != null) {
                     degraded = true;
+                    if (llmResp.fallbackReason() != null && !llmResp.fallbackReason().isBlank()) {
+                        fallbackReason = llmResp.fallbackReason();
+                    }
                 }
             } else if (chatModel != null) {
                 report = runLlmInvestigationWithTimeout(caseRecord, investigationId, 20);
                 activeModel = modelName;
+                provider = "gemini";
+                providerMode = "PRIMARY";
+                fallbackReason = null;
             }
         } catch (Exception e) {
+            fallbackReason = e.getClass().getSimpleName();
             log.warn("LLM investigation failed or timed out for case {}: {}. Falling back to cached / rule-based findings.",
                 caseId, e.getMessage());
             degraded = true;
@@ -234,10 +295,12 @@ public class InvestigatorService {
                 report = generateRuleBasedReport(caseRecord);
             }
             degraded = true;
-        }
-
-        if (degraded && (activeModel == null || "rules".equals(activeModel))) {
-            activeModel = "rules";
+            provider = com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER;
+            providerMode = "RULE_BASED";
+            latencyMs = null;
+            promptTokens = null;
+            completionTokens = null;
+            activeModel = "rule_fallback (deterministic-rules)";
         }
 
         // Deterministic Verification Pass
@@ -260,7 +323,9 @@ public class InvestigatorService {
                 verifiedReport.missing(),
                 verifiedReport.recommendedAction(),
                 true,
-                verifiedReport.explanation() != null ? verifiedReport.explanation() : "LLM degraded: rule-based findings verified"
+                verifiedReport.explanation() != null ? verifiedReport.explanation() : "LLM degraded: rule-based findings verified",
+                0,
+                verifiedReport.totalCitations()
             );
         }
 
@@ -280,7 +345,7 @@ public class InvestigatorService {
 
         investigationRepository.insert(record);
 
-        // Execute and record real read-only tool telemetry steps if none were recorded yet by ChatClient
+        // Execute and record real read-only tool telemetry steps if none were recorded yet
         List<InvestigationStepRecord> existingSteps = stepRepository.findByInvestigationId(investigationId);
         if (existingSteps.isEmpty() && investigatorTools != null) {
             InvestigationContext.setCurrentInvestigationId(investigationId);
@@ -326,7 +391,15 @@ public class InvestigatorService {
             activeModel,
             startedAt,
             finishedAt,
-            stepDtos
+            stepDtos,
+            verifiedReport.verifiedCitations(),
+            verifiedReport.totalCitations(),
+            provider,
+            providerMode,
+            fallbackReason,
+            latencyMs,
+            promptTokens,
+            completionTokens
         );
     }
 
@@ -340,6 +413,44 @@ public class InvestigatorService {
             .map(this::toStepDto)
             .toList();
 
+        String provider = com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER;
+        String providerMode = record.status() == InvestigationStatus.DEGRADED ? "RULE_BASED" : "PRIMARY";
+        String fallbackReason = null;
+        Long latencyMs = null;
+        Integer promptTokens = null;
+        Integer completionTokens = null;
+
+        if (llmCallRepository != null) {
+            List<com.payresolve.ai.LlmCallRecord> calls = llmCallRepository.findByCaseId(record.caseId());
+            Optional<com.payresolve.ai.LlmCallRecord> latestEffective = calls.stream()
+                .filter(c -> "TEXT_INVESTIGATION".equalsIgnoreCase(c.callType()))
+                .filter(c -> !"FAILED".equalsIgnoreCase(c.status()))
+                .findFirst();
+
+            if (latestEffective.isPresent() && record.status() != InvestigationStatus.DEGRADED) {
+                var call = latestEffective.get();
+                provider = call.provider();
+                if (com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER.equalsIgnoreCase(provider)
+                    || "DEGRADED".equalsIgnoreCase(call.status())) {
+                    providerMode = "RULE_BASED";
+                    fallbackReason = call.fallbackReason();
+                } else {
+                    providerMode = call.fallbackUsed() || "FALLBACK".equalsIgnoreCase(call.status()) ? "FALLBACK" : "PRIMARY";
+                    fallbackReason = call.fallbackReason();
+                    latencyMs = call.latencyMs();
+                    promptTokens = call.promptTokens();
+                    completionTokens = call.completionTokens();
+                }
+            } else if (!calls.isEmpty()) {
+                var top = calls.get(0);
+                fallbackReason = top.fallbackReason();
+                if (record.status() == InvestigationStatus.DEGRADED) {
+                    providerMode = "RULE_BASED";
+                    provider = com.payresolve.ai.LlmRouter.RULE_FALLBACK_PROVIDER;
+                }
+            }
+        }
+
         return new InvestigationResponseDto(
             record.id(),
             record.caseId(),
@@ -348,7 +459,17 @@ public class InvestigatorService {
             record.model(),
             record.startedAt(),
             record.finishedAt(),
-            stepDtos
+            stepDtos,
+            (Boolean.TRUE.equals(report.degraded()) || record.status() == InvestigationStatus.DEGRADED)
+                ? Integer.valueOf(0)
+                : report.verifiedCitations(),
+            report.totalCitations(),
+            provider,
+            providerMode,
+            fallbackReason,
+            latencyMs,
+            promptTokens,
+            completionTokens
         );
     }
 
@@ -660,20 +781,100 @@ public class InvestigatorService {
         }
     }
 
+    private String gatherToolEvidenceContext(CaseRecord caseRecord) {
+        StringBuilder sb = new StringBuilder("\n\nVERIFIED READ-ONLY EVIDENCE SNAPSHOT:\n");
+        try {
+            List<CaseEvidenceRecord> fullEvidence = caseEvidenceRepository.findByCaseId(caseRecord.id());
+            if (!fullEvidence.isEmpty()) {
+                sb.append("Normalized Case Evidence Payloads: ").append(toJson(fullEvidence)).append("\n");
+            }
+            if (caseRecord.shopOrderId() != null && !caseRecord.shopOrderId().isBlank()) {
+                shopOrderService.findOrderById(caseRecord.shopOrderId())
+                    .ifPresent(o -> sb.append("Shop Order: ").append(toJson(o)).append("\n"));
+                shopOrderService.findPaymentByOrderId(caseRecord.shopOrderId())
+                    .ifPresent(p -> sb.append("Payment Capture Record: ").append(toJson(p)).append("\n"));
+                List<RefundRecord> refunds = shopOrderService.getRefundsByOrderId(caseRecord.shopOrderId());
+                if (!refunds.isEmpty()) {
+                    sb.append("Refund Records: ").append(toJson(refunds)).append("\n");
+                }
+                List<ShipmentRecord> shipments = shopOrderService.getShipmentsByOrderId(caseRecord.shopOrderId());
+                if (!shipments.isEmpty()) {
+                    sb.append("Shipment Records: ").append(toJson(shipments)).append("\n");
+                }
+            }
+            if ((caseRecord.shopOrderId() != null && !caseRecord.shopOrderId().isBlank())
+                || (caseRecord.paypalOrderId() != null && !caseRecord.paypalOrderId().isBlank())) {
+                List<WebhookEvent> webhooks = webhookEventRepository.findByOrderRefs(
+                    caseRecord.shopOrderId(),
+                    caseRecord.paypalOrderId(),
+                    null
+                );
+                if (!webhooks.isEmpty()) {
+                    sb.append("Webhook Events: ").append(toJson(webhooks)).append("\n");
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Partial read-only evidence snapshot for case {}: {}", caseRecord.id(), e.getMessage());
+        }
+        sb.append("""
+            
+            OUTPUT JSON SCHEMA REQUIREMENT:
+            Return strictly valid JSON with exact keys:
+            {
+              "status": "CAUSE_FOUND" | "CAUSE_NOT_DETERMINED",
+              "confirmed": [{"statement": "...", "evidenceIds": ["..."]}],
+              "conflicts": [{"statement": "...", "evidenceIds": ["..."]}],
+              "missing": [{"item": "...", "why": "..."}],
+              "recommendedAction": {"type": "SYNC_ORDER_STATUS" | "HOLD_REFUND" | "REQUEST_REVIEW" | "NONE", "rationale": "...", "evidenceIds": ["..."]},
+              "explanation": "..."
+            }
+            """);
+        return sb.toString();
+    }
+
     private InvestigationReport parseReport(String json) {
         if (json == null || json.isBlank()) {
             return new InvestigationReport("CAUSE_NOT_DETERMINED", List.of(), List.of(), List.of(), null, true, "Empty report");
         }
         try {
-            tools.jackson.databind.JsonNode node = objectMapper.readTree(json);
-            if (node.isTextual()) {
-                return objectMapper.readValue(node.asText(), InvestigationReport.class);
-            }
-            return objectMapper.treeToValue(node, InvestigationReport.class);
+            return parseReportStrict(json);
         } catch (Exception e) {
             log.warn("Failed to parse report JSON: {}", e.getMessage());
             return new InvestigationReport("CAUSE_NOT_DETERMINED", List.of(), List.of(), List.of(), null, true, "Unparseable report JSON");
         }
+    }
+
+    private InvestigationReport parseReportStrict(String raw) throws Exception {
+        String cleaned = stripCodeFences(raw);
+        tools.jackson.databind.JsonNode node = objectMapper.readTree(cleaned);
+        if (node.isTextual()) {
+            cleaned = stripCodeFences(node.asText());
+            return objectMapper.readValue(cleaned, InvestigationReport.class);
+        }
+        return objectMapper.treeToValue(node, InvestigationReport.class);
+    }
+
+    private static String stripCodeFences(String raw) {
+        if (raw == null) return "";
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline >= 0) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+            trimmed = trimmed.trim();
+        }
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("\"")) {
+            int start = trimmed.indexOf('{');
+            int end = trimmed.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                trimmed = trimmed.substring(start, end + 1);
+            }
+        }
+        return trimmed;
     }
 }
 

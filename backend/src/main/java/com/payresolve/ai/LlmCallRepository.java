@@ -61,17 +61,17 @@ public class LlmCallRepository {
     }
 
     public List<LlmCallRecord> findByCaseId(String caseId) {
-        String sql = "SELECT * FROM llm_calls WHERE case_id = ? ORDER BY created_at DESC";
+        String sql = "SELECT * FROM llm_calls WHERE case_id = ? ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper, caseId);
     }
 
     public List<LlmCallRecord> findRecent(int limit) {
-        String sql = "SELECT * FROM llm_calls ORDER BY created_at DESC LIMIT ?";
+        String sql = "SELECT * FROM llm_calls ORDER BY created_at DESC, id DESC LIMIT ?";
         return jdbcTemplate.query(sql, rowMapper, limit);
     }
 
     public Optional<LlmCallRecord> findLatestSuccessfulBySnapshotHash(String snapshotHash) {
-        String sql = "SELECT * FROM llm_calls WHERE snapshot_hash = ? AND status = 'SUCCESS' ORDER BY created_at DESC LIMIT 1";
+        String sql = "SELECT * FROM llm_calls WHERE snapshot_hash = ? AND status = 'SUCCESS' ORDER BY created_at DESC, id DESC LIMIT 1";
         List<LlmCallRecord> results = jdbcTemplate.query(sql, rowMapper, snapshotHash);
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
