@@ -64,17 +64,21 @@ class CaseIntegrationTest {
         // Seed to ensure PR-0142 exists
         caseService.seedDemoCases();
 
+        CaseRecord c = caseRepository.findById("PR-0142").orElseThrow();
+
         mockMvc.perform(get("/api/cases/PR-0142")
                 .with(user("viewer").roles("VIEWER")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("PR-0142"))
             .andExpect(jsonPath("$.type").value("PAID_NOT_MARKED"))
             .andExpect(jsonPath("$.typeLabel").value("Paid, not marked"))
-            .andExpect(jsonPath("$.severity").value("High"))
+            .andExpect(jsonPath("$.status").value(c.status().name()))
+            .andExpect(jsonPath("$.severity").value(c.severity().name()))
             .andExpect(jsonPath("$.amount").value("$84.50"))
             .andExpect(jsonPath("$.amountMinor").value(8450))
             .andExpect(jsonPath("$.shopOrderId").value("ORD-10482"))
-            .andExpect(jsonPath("$.paypalOrderId").value("PP-10482"));
+            .andExpect(jsonPath("$.paypalOrderId").value("PP-10482"))
+            .andExpect(jsonPath("$.openedAt").exists());
 
         mockMvc.perform(get("/api/cases/PR-NONEXISTENT")
                 .with(user("viewer").roles("VIEWER")))
@@ -123,7 +127,7 @@ class CaseIntegrationTest {
                     { "status": "INVESTIGATING" }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("Investigating"))
+            .andExpect(jsonPath("$.status").value("INVESTIGATING"))
             .andExpect(jsonPath("$.resolvedAt").doesNotExist());
 
         // 2. Move PR-0142 to ACTION_PROPOSED
@@ -135,7 +139,7 @@ class CaseIntegrationTest {
                     { "status": "ACTION_PROPOSED" }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("Proposed"));
+            .andExpect(jsonPath("$.status").value("ACTION_PROPOSED"));
 
         // 3. Resolve case
         mockMvc.perform(patch("/api/cases/PR-0142/status")
@@ -146,8 +150,25 @@ class CaseIntegrationTest {
                     { "status": "RESOLVED" }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("Resolved"))
+            .andExpect(jsonPath("$.status").value("RESOLVED"))
             .andExpect(jsonPath("$.resolvedAt").exists());
+    }
+
+    @Test
+    @DisplayName("Case page header data integrity: status and severity match DB case record exactly")
+    void casePageHeaderDataIntegrity() throws Exception {
+        caseService.seedDemoCases();
+
+        java.util.List<CaseRecord> cases = caseRepository.findAll(null, null, null, null, 20, 0);
+        org.assertj.core.api.Assertions.assertThat(cases).isNotEmpty();
+        for (CaseRecord c : cases) {
+            mockMvc.perform(get("/api/cases/" + c.id())
+                    .with(user("viewer").roles("VIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(c.status().name()))
+                .andExpect(jsonPath("$.severity").value(c.severity().name()))
+                .andExpect(jsonPath("$.openedAt").isNotEmpty());
+        }
     }
 
     @Test

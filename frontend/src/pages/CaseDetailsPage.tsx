@@ -347,13 +347,16 @@ export default function CaseDetailsPage() {
     }
   })();
 
+  const normalizedStatus = (caseData.status || '').toUpperCase();
+  const normalizedSeverity = (caseData.severity || '').toUpperCase();
+
   // Severity pill classes
   const severityBadge =
-    caseData.severity === 'HIGH' ? (
+    normalizedSeverity === 'HIGH' ? (
       <span className="text-rose-600 dark:text-rose-400 font-semibold inline-flex items-center gap-1">
         severity high <InfoTip metricId="case.severity" size={14} />
       </span>
-    ) : caseData.severity === 'MEDIUM' ? (
+    ) : normalizedSeverity === 'MEDIUM' ? (
       <span className="text-amber-600 dark:text-amber-400 font-semibold inline-flex items-center gap-1">
         severity medium <InfoTip metricId="case.severity" size={14} />
       </span>
@@ -364,21 +367,25 @@ export default function CaseDetailsPage() {
     );
 
   const statusBadge =
-    caseData.status === 'OPEN' ? (
+    normalizedStatus === 'OPEN' ? (
       <span className="px-3.5 py-1 rounded-full border border-amber-400 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-xs font-normal inline-flex items-center gap-1">
         Open <InfoTip metricId="case.status" size={14} />
       </span>
-    ) : caseData.status === 'INVESTIGATING' ? (
+    ) : normalizedStatus === 'INVESTIGATING' ? (
       <span className="px-3.5 py-1 rounded-full border border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-xs font-normal inline-flex items-center gap-1">
         Investigating <InfoTip metricId="case.status" size={14} />
       </span>
-    ) : caseData.status === 'ACTION_PROPOSED' ? (
+    ) : normalizedStatus === 'ACTION_PROPOSED' || normalizedStatus === 'PROPOSED' ? (
       <span className="px-3.5 py-1 rounded-full border border-purple-400 dark:border-purple-700 text-purple-600 dark:text-purple-400 text-xs font-normal inline-flex items-center gap-1">
         Proposed <InfoTip metricId="case.status" size={14} />
       </span>
-    ) : (
+    ) : normalizedStatus === 'RESOLVED' ? (
       <span className="px-3.5 py-1 rounded-full border border-emerald-400 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 text-xs font-normal inline-flex items-center gap-1">
         Resolved <InfoTip metricId="case.status" size={14} />
+      </span>
+    ) : (
+      <span className="px-3.5 py-1 rounded-full border border-slate-400 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-normal inline-flex items-center gap-1">
+        {caseData.status || 'Unknown'} <InfoTip metricId="case.status" size={14} />
       </span>
     );
 
@@ -396,6 +403,12 @@ export default function CaseDetailsPage() {
               <span>Order #{caseData.shopOrderId?.replace('ORD-', '') || caseData.paypalOrderId}</span>
               <span>&middot;</span>
               <span>opened {calculateAge(caseData.openedAt)} ago</span>
+              {caseData.resolvedAt && (
+                <>
+                  <span>&middot;</span>
+                  <span>resolved {calculateAge(caseData.resolvedAt)} ago</span>
+                </>
+              )}
               <span>&middot;</span>
               {severityBadge}
             </p>
@@ -421,7 +434,7 @@ export default function CaseDetailsPage() {
             >
               {investigateMutation.isPending
                 ? 'Investigating...'
-                : caseData.status === 'RESOLVED'
+                : normalizedStatus === 'RESOLVED'
                 ? 'Re-investigate'
                 : 'Investigate'}
             </button>
@@ -685,7 +698,7 @@ export default function CaseDetailsPage() {
               </div>
             ) : (
               <div className="pt-2 text-xs text-slate-500 dark:text-slate-400">
-                {caseData.status === 'RESOLVED'
+                {normalizedStatus === 'RESOLVED'
                   ? 'Case resolved. All operator actions completed.'
                   : 'No action currently awaiting operator approval. Run the investigator to propose next steps.'}
               </div>
