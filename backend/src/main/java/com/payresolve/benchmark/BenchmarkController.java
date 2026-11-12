@@ -22,9 +22,9 @@ public class BenchmarkController {
     @GetMapping("/latest")
     @Operation(summary = "Get the latest benchmark evaluation run results")
     public ResponseEntity<BenchmarkResultDto> getLatestRun() {
-        return benchmarkService.getLatestRun()
-            .map(ResponseEntity::ok)
-            .orElseGet(() -> ResponseEntity.ok(null));
+        return ResponseEntity.ok(
+            benchmarkService.getLatestRun().orElseGet(benchmarkService::runBenchmark)
+        );
     }
 
     @PostMapping("/run")

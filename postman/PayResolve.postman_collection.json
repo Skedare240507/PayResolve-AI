@@ -954,11 +954,81 @@
           ]
         },
         {
+          "name": "benchmark",
+          "description": "Detector benchmark evaluation metrics and per-case pass/fail telemetry.",
+          "item": [
+            {
+              "name": "14. Latest Benchmark Telemetry",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Latest Benchmark Telemetry - Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Response time < 10000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Content-Type is application/json\", function () {",
+                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                      "});",
+                      "",
+                      "pm.test(\"Latest Benchmark Telemetry - Response has JSON body\", function () {",
+                      "    pm.response.to.have.jsonBody();",
+                      "});",
+                      "",
+                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"runAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"totalCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"passedCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"precisionPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"recallPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"groundingRatePct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"medianTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"caseOutcomes\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"boolean\"}},\"cases\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"caseId\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"passed\":{\"type\":[\"boolean\",\"null\"]},\"expectedOutcome\":{\"type\":[\"string\",\"null\"]},\"actualOutcome\":{\"type\":[\"string\",\"null\"]},\"durationMs\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"expectedEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"actualEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"description\":{\"type\":[\"string\",\"null\"]}}}},\"ruleTimeToCauseMs\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"investigatorTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"manualTimeToCauseMinutes\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"replayTest\":{\"type\":[\"object\",\"null\"],\"properties\":{\"attempts\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"businessEffectsApplied\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"duplicatesBlocked\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"idempotent\":{\"type\":[\"boolean\",\"null\"]},\"eventId\":{\"type\":[\"string\",\"null\"]}}}}};",
+                      "pm.test(\"Latest Benchmark Telemetry - Matches OpenAPI contract schema\", function () {",
+                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
+                      "});",
+                      "",
+                      "pm.test(\"Benchmark metrics show seeded cases\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.totalCases).to.be.above(0);",
+                      "    pm.expect(json.precisionPct).to.be.within(0, 100);",
+                      "    pm.expect(json.recallPct).to.be.within(0, 100);",
+                      "});",
+                      "",
+                      "pm.test(\"Zero secrets leaked in response\", function () {",
+                      "    const text = pm.response.text();",
+                      "    pm.expect(text).to.not.include(\"password\");",
+                      "    pm.expect(text).to.not.include(\"client_secret\");",
+                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
+                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
+                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/benchmark/latest",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "benchmark",
+                    "latest"
+                  ]
+                },
+                "description": "Retrieves latest benchmark precision, recall, grounding rate, and case breakdown."
+              }
+            }
+          ]
+        },
+        {
           "name": "actions",
           "description": "Human-in-the-loop proposed actions, immutable audit log, CSRF enforcement, RBAC 403 checks, and logout.",
           "item": [
             {
-              "name": "14. List Actions / Proposals",
+              "name": "15. List Actions / Proposals",
               "event": [
                 {
                   "listen": "test",
@@ -1022,7 +1092,7 @@
               }
             },
             {
-              "name": "15. List Audit Trail",
+              "name": "16. List Audit Trail",
               "event": [
                 {
                   "listen": "test",
@@ -1083,7 +1153,7 @@
               }
             },
             {
-              "name": "16. Write Security - CSRF Required on Action Approval",
+              "name": "17. Write Security - CSRF Required on Action Approval",
               "event": [
                 {
                   "listen": "test",
@@ -1138,7 +1208,7 @@
               }
             },
             {
-              "name": "17. Login as Viewer",
+              "name": "18. Login as Viewer",
               "event": [
                 {
                   "listen": "test",
@@ -1217,7 +1287,7 @@
               }
             },
             {
-              "name": "18. Fetch Viewer CSRF Token",
+              "name": "19. Fetch Viewer CSRF Token",
               "event": [
                 {
                   "listen": "test",
@@ -1280,7 +1350,7 @@
               }
             },
             {
-              "name": "19. RBAC Security - Viewer Forbidden on Action Approval",
+              "name": "20. RBAC Security - Viewer Forbidden on Action Approval",
               "event": [
                 {
                   "listen": "test",
@@ -1339,7 +1409,7 @@
               }
             },
             {
-              "name": "20. Logout",
+              "name": "21. Logout",
               "event": [
                 {
                   "listen": "test",
@@ -1399,76 +1469,6 @@
                     "value": "{{csrfToken}}"
                   }
                 ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "benchmark",
-          "description": "Detector benchmark evaluation metrics and per-case pass/fail telemetry.",
-          "item": [
-            {
-              "name": "21. Latest Benchmark Telemetry",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "pm.test(\"Latest Benchmark Telemetry - Status code is 200\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "});",
-                      "",
-                      "pm.test(\"Latest Benchmark Telemetry - Response time < 10000ms\", function () {",
-                      "    pm.expect(pm.response.responseTime).to.be.below(10000);",
-                      "});",
-                      "",
-                      "pm.test(\"Latest Benchmark Telemetry - Content-Type is application/json\", function () {",
-                      "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
-                      "});",
-                      "",
-                      "pm.test(\"Latest Benchmark Telemetry - Response has JSON body\", function () {",
-                      "    pm.response.to.have.jsonBody();",
-                      "});",
-                      "",
-                      "const schema = {\"type\":\"object\",\"properties\":{\"id\":{\"type\":[\"string\",\"null\"]},\"runAt\":{\"type\":[\"string\",\"null\"],\"format\":\"date-time\"},\"totalCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"passedCases\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"precisionPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"recallPct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"groundingRatePct\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"medianTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"caseOutcomes\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"boolean\"}},\"cases\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"caseId\":{\"type\":[\"string\",\"null\"]},\"type\":{\"type\":[\"string\",\"null\"]},\"passed\":{\"type\":[\"boolean\",\"null\"]},\"expectedOutcome\":{\"type\":[\"string\",\"null\"]},\"actualOutcome\":{\"type\":[\"string\",\"null\"]},\"durationMs\":{\"type\":[\"integer\",\"null\"],\"format\":\"int64\"},\"expectedEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"actualEvidenceIds\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"string\"}},\"description\":{\"type\":[\"string\",\"null\"]}}}},\"ruleTimeToCauseMs\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"investigatorTimeToCauseSeconds\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"manualTimeToCauseMinutes\":{\"type\":[\"number\",\"null\"],\"format\":\"double\"},\"replayTest\":{\"type\":[\"object\",\"null\"],\"properties\":{\"attempts\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"businessEffectsApplied\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"duplicatesBlocked\":{\"type\":[\"integer\",\"null\"],\"format\":\"int32\"},\"idempotent\":{\"type\":[\"boolean\",\"null\"]},\"eventId\":{\"type\":[\"string\",\"null\"]}}}}};",
-                      "pm.test(\"Latest Benchmark Telemetry - Matches OpenAPI contract schema\", function () {",
-                      "    pm.response.to.have.jsonSchema(schema, { unknownFormats: [\"int32\", \"int64\", \"float\", \"double\", \"uri\", \"date-time\"] });",
-                      "});",
-                      "",
-                      "pm.test(\"Benchmark metrics show seeded cases\", function () {",
-                      "    const json = pm.response.json();",
-                      "    pm.expect(json.totalCases).to.be.above(0);",
-                      "    pm.expect(json.precisionPct).to.be.within(0, 100);",
-                      "    pm.expect(json.recallPct).to.be.within(0, 100);",
-                      "});",
-                      "",
-                      "pm.test(\"Zero secrets leaked in response\", function () {",
-                      "    const text = pm.response.text();",
-                      "    pm.expect(text).to.not.include(\"password\");",
-                      "    pm.expect(text).to.not.include(\"client_secret\");",
-                      "    pm.expect(text).to.not.include(\"DATABASE_URL\");",
-                      "    pm.expect(text).to.not.include(\"GEMINI_API_KEY\");",
-                      "    pm.expect(text).to.not.include(\"GROQ_API_KEY\");",
-                      "});"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "url": {
-                  "raw": "{{baseUrl}}/api/benchmark/latest",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "benchmark",
-                    "latest"
-                  ]
-                },
-                "description": "Retrieves latest benchmark precision, recall, grounding rate, and case breakdown."
               }
             }
           ]
