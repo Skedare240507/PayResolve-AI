@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.databind.ObjectMapper;
@@ -67,6 +68,7 @@ public class CaseAttachmentController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasRole('OPERATOR')")
     @Operation(
         summary = "Upload multimodal evidence file (PNG, JPEG, PDF up to 4MB)",
         responses = {
@@ -95,7 +97,8 @@ public class CaseAttachmentController {
 
         int count = attachmentRepository.countByCaseId(caseId);
         if (count >= 5) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Maximum 5 attachments allowed per case"));
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(Map.of("error", "Maximum 5 attachments allowed per case"));
         }
 
         String contentType = detectContentType(file);
@@ -110,10 +113,18 @@ public class CaseAttachmentController {
             String base64 = Base64.getEncoder().encodeToString(bytes);
             String attachmentId = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
+            String ext = switch (contentType) {
+                case "image/png" -> ".png";
+                case "image/jpeg" -> ".jpg";
+                case "application/pdf" -> ".pdf";
+                default -> ".bin";
+            };
+            String randomizedFilename = UUID.randomUUID().toString() + ext;
+
             CaseAttachmentRecord record = new CaseAttachmentRecord(
                 attachmentId,
                 caseId,
-                file.getOriginalFilename() != null ? file.getOriginalFilename() : "evidence-file",
+                randomizedFilename,
                 contentType,
                 file.getSize(),
                 base64,
@@ -122,7 +133,8 @@ public class CaseAttachmentController {
             );
 
             attachmentRepository.save(record);
-            log.info("Saved attachment {} for case {} ({} bytes, type {})", attachmentId, caseId, file.getSize(), contentType);
+            log.info("Saved attachment {} for case {} ({} bytes, type {}, stored as {})",
+                attachmentId, caseId, file.getSize(), contentType, randomizedFilename);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(toDto(record));
         } catch (Exception e) {
@@ -132,6 +144,7 @@ public class CaseAttachmentController {
     }
 
     @PostMapping(value = "/{attachmentId}/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasRole('OPERATOR')")
     @Operation(
         summary = "Trigger AI multimodal extraction for an uploaded attachment",
         responses = {
@@ -226,10 +239,7 @@ public class CaseAttachmentController {
             }
         } catch (Exception ignored) {}
 
-        String ct = file.getContentType();
-        if ("image/png".equalsIgnoreCase(ct) || "image/jpeg".equalsIgnoreCase(ct) || "application/pdf".equalsIgnoreCase(ct)) {
-            return ct.toLowerCase();
-        }
+        // Strictly magic bytes only - no client Content-Type fallback
         return null;
     }
 
