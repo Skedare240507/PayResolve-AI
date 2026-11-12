@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -244,6 +245,18 @@ class SecurityAuthorizationIntegrationTest {
         mockMvc.perform(get("/v3/api-docs")
                 .with(user("operator").roles("OPERATOR")))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Security headers (CSP, nosniff, frame-ancestors/deny, Referrer-Policy, Permissions-Policy) are present on responses")
+    void securityHeadersEnforced() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+            .andExpect(header().string("X-Frame-Options", "DENY"))
+            .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+            .andExpect(header().exists("Permissions-Policy"))
+            .andExpect(header().exists("Content-Security-Policy"));
     }
 
     @Test

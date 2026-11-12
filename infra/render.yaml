@@ -108,6 +108,19 @@ services:
     runtime: static
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: ./frontend/dist
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://payresolve-api.onrender.com https://api.groq.com https://generativelanguage.googleapis.com https://api-m.sandbox.paypal.com https://*.supabase.co; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "geolocation=(), camera=(), microphone=(), payment=()"
     routes:
       # Proxy /api/* and /actuator/* to the API service so the browser only
       # talks to one origin (payresolve-ui.onrender.com). This keeps the session
