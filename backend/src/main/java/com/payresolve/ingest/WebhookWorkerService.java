@@ -2,6 +2,7 @@ package com.payresolve.ingest;
 
 import com.payresolve.common.Money;
 import com.payresolve.shop.DemoFaultSwitches;
+import com.payresolve.shop.ShopOrder;
 import com.payresolve.shop.ShopOrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,13 +16,18 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Background worker that claims PENDING webhook records using FOR UPDATE SKIP LOCKED,
- * applies business effects idempotently, records attempts/last_error, and retries with backoff.
+ * applies business effects idempotently, handles arrival races cleanly via next_attempt_at
+ * (3s polling up to 90s), and retries transient handler failures with exponential backoff.
  */
 @Service
 public class WebhookWorkerService {
+
+    public static final int ARRIVAL_RACE_POLL_SECONDS = 3;
+    public static final int ARRIVAL_RACE_MAX_WAIT_SECONDS = 90;
 
     private static final Logger log = LoggerFactory.getLogger(WebhookWorkerService.class);
 
@@ -58,9 +64,6 @@ public class WebhookWorkerService {
         this.initialBackoffMs = initialBackoffMs;
     }
 
-    /**
-     * Periodic scheduled worker run.
-     */
     @Scheduled(fixedDelayString = "${payresolve.ingest.worker-interval-ms:2000}")
     public void runWorker() {
         if (!workerEnabled) {
@@ -69,12 +72,6 @@ public class WebhookWorkerService {
         processBatch(10);
     }
 
-    /**
-     * Claims and processes a batch of pending verified webhook events.
-     *
-     * @param batchSize maximum number of events to claim
-     * @return count of successfully processed events
-     */
     @Transactional
     public int processBatch(int batchSize) {
         List<WebhookEvent> pendingEvents = repository.claimPendingEvents(batchSize);
@@ -99,9 +96,6 @@ public class WebhookWorkerService {
         return processedCount;
     }
 
-    /**
-     * Processes a single event by ID synchronously (for manual replay or deterministic tests).
-     */
     @Transactional
     public boolean processSingleEvent(Long eventId) {
         return repository.findById(eventId)
@@ -122,7 +116,11 @@ public class WebhookWorkerService {
 
         try {
             if ("PAYMENT.CAPTURE.COMPLETED".equalsIgnoreCase(event.eventType())) {
-                processPaymentCaptureCompleted(event);
+                boolean applied = processPaymentCaptureCompleted(event);
+                if (!applied) {
+                    // Re-queued for arrival race without incrementing attempts or failing
+                    return false;
+                }
             } else if ("CHECKOUT.ORDER.APPROVED".equalsIgnoreCase(event.eventType())) {
                 String ppOrderId = event.paypalOrderId() != null ? event.paypalOrderId() : event.resourceId();
                 Instant approvedAt = event.eventCreatedAt() != null ? event.eventCreatedAt() : event.receivedAt();
@@ -144,38 +142,66 @@ public class WebhookWorkerService {
         }
     }
 
-    private void processPaymentCaptureCompleted(WebhookEvent event) {
-        try {
-            JsonNode root = objectMapper.readTree(event.rawBody());
-            JsonNode resource = root.get("resource");
-            if (resource == null) {
-                log.warn("Webhook event {} contains no resource block", event.paypalEventId());
-                return;
-            }
-
-            String captureId = resource.hasNonNull("id") ? resource.get("id").asText() : event.resourceId();
-            String customId = resource.hasNonNull("custom_id") ? resource.get("custom_id").asText() : event.customId();
-            if ((customId == null || customId.isBlank()) && event.paypalOrderId() != null) {
-                customId = shopOrderService.findOrderByPayPalOrderId(event.paypalOrderId())
-                    .map(com.payresolve.shop.ShopOrder::id)
-                    .orElse(null);
-            }
-
-            Money amount = Money.of(0L, "USD");
-            if (resource.hasNonNull("amount")) {
-                JsonNode amountNode = resource.get("amount");
-                String currency = amountNode.hasNonNull("currency_code") ? amountNode.get("currency_code").asText() : "USD";
-                String value = amountNode.hasNonNull("value") ? amountNode.get("value").asText() : "0.00";
-                amount = Money.parse(value, currency);
-            }
-
-            log.info("Applying payment capture effect: captureId={}, customId={}, amount={}",
-                captureId, customId, amount);
-
-            shopOrderService.applyPaymentCapture(customId, captureId, amount);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to apply payment capture business effect: " + e.getMessage(), e);
+    private boolean processPaymentCaptureCompleted(WebhookEvent event) {
+        JsonNode root = objectMapper.readTree(event.rawBody());
+        JsonNode resource = root.get("resource");
+        if (resource == null) {
+            log.warn("Webhook event {} contains no resource block", event.paypalEventId());
+            return true;
         }
+
+        String captureId = resource.hasNonNull("id") ? resource.get("id").asText() : event.resourceId();
+        String customId = resource.hasNonNull("custom_id") ? resource.get("custom_id").asText() : event.customId();
+        String paypalOrderId = event.paypalOrderId();
+        if (paypalOrderId == null && resource.hasNonNull("supplementary_data")) {
+            JsonNode supp = resource.get("supplementary_data");
+            if (supp.hasNonNull("related_ids") && supp.get("related_ids").hasNonNull("order_id")) {
+                paypalOrderId = supp.get("related_ids").get("order_id").asText();
+            }
+        }
+
+        Optional<ShopOrder> linkedOrder = Optional.empty();
+        if (customId != null && !customId.isBlank()) {
+            linkedOrder = shopOrderService.findOrderById(customId);
+        }
+        if (linkedOrder.isEmpty() && paypalOrderId != null && !paypalOrderId.isBlank()) {
+            linkedOrder = shopOrderService.findOrderByPayPalOrderId(paypalOrderId);
+            if (linkedOrder.isPresent()) {
+                customId = linkedOrder.get().id();
+            }
+        }
+
+        // Arrival race: order not linked or created yet -> re-queue every 3s for up to 90s without failing
+        boolean expectsLinkedOrder = (customId != null && !customId.isBlank()) || (paypalOrderId != null && !paypalOrderId.isBlank());
+        if (linkedOrder.isEmpty() && expectsLinkedOrder) {
+            Instant receivedAt = event.receivedAt() != null ? event.receivedAt() : clock.instant();
+            if (clock.instant().isBefore(receivedAt.plusSeconds(ARRIVAL_RACE_MAX_WAIT_SECONDS))) {
+                Instant nextAttemptAt = clock.instant().plusSeconds(ARRIVAL_RACE_POLL_SECONDS);
+                repository.requeueForArrivalRace(
+                    event.id(),
+                    nextAttemptAt,
+                    "Shop order not linked yet; re-queued for " + ARRIVAL_RACE_POLL_SECONDS + "s arrival-race check"
+                );
+                log.info("Arrival race for event {} (customId={}, paypalOrderId={}): re-queued to {} without counting failure",
+                    event.paypalEventId(), customId, paypalOrderId, nextAttemptAt);
+                return false;
+            }
+            throw new IllegalStateException("Shop order still not linked after 90s wait for capture " + captureId);
+        }
+
+        Money amount = Money.of(0L, "USD");
+        if (resource.hasNonNull("amount")) {
+            JsonNode amountNode = resource.get("amount");
+            String currency = amountNode.hasNonNull("currency_code") ? amountNode.get("currency_code").asText() : "USD";
+            String value = amountNode.hasNonNull("value") ? amountNode.get("value").asText() : "0.00";
+            amount = Money.parse(value, currency);
+        }
+
+        log.info("Applying payment capture effect: captureId={}, customId={}, amount={}",
+            captureId, customId, amount);
+
+        shopOrderService.applyPaymentCapture(customId, captureId, amount);
+        return true;
     }
 
     private boolean shouldBackoff(WebhookEvent event) {

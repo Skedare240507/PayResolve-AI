@@ -2,6 +2,7 @@ package com.payresolve.cases;
 
 import com.payresolve.cases.dto.DetectionRunResultDto;
 import com.payresolve.common.Money;
+import com.payresolve.ingest.DuplicateWebhookDeliveredEvent;
 import com.payresolve.ingest.WebhookEvent;
 import com.payresolve.ingest.WebhookEventRepository;
 import com.payresolve.paypal.model.Amount;
@@ -12,17 +13,17 @@ import com.payresolve.shop.ShopOrder;
 import com.payresolve.shop.ShopOrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 
 /**
- * Service that builds snapshots from system state, invokes pure Detector instances,
- * and records findings as exception cases.
+ * Service that builds snapshots from system state using indexed columns (custom_id, paypal_order_id,
+ * resource_id), invokes pure Detector instances, and records findings as exception cases.
  */
 @Service
 public class CaseDetectionService {
@@ -49,12 +50,6 @@ public class CaseDetectionService {
         this.clock = clock;
     }
 
-    /**
-     * Executes all detectors across the entire state of shop orders, payments, and events.
-     * Enforces that reruns update existing cases rather than creating duplicates.
-     *
-     * @return summary metrics of the detection run
-     */
     @Transactional
     public DetectionRunResultDto runDetection() {
         log.info("Starting on-demand payment discrepancy detection run with {} detectors", detectors.size());
@@ -87,21 +82,23 @@ public class CaseDetectionService {
             }
         }
 
-        // 2. Evaluate orphan captures from webhook events that have no associated shop order
-        Set<String> knownOrderIds = new HashSet<>();
+        // 2. Evaluate orphan captures from verified webhook events using structured ID columns
+        Set<String> knownShopOrderIds = new HashSet<>();
+        Set<String> knownPaypalOrderIds = new HashSet<>();
         orders.forEach(o -> {
-            knownOrderIds.add(o.id());
+            knownShopOrderIds.add(o.id());
             if (o.paypalOrderId() != null) {
-                knownOrderIds.add(o.paypalOrderId());
+                knownPaypalOrderIds.add(o.paypalOrderId());
             }
         });
 
         for (WebhookEvent event : allEvents) {
             if ("PAYMENT.CAPTURE.COMPLETED".equalsIgnoreCase(event.eventType()) && event.verified()) {
-                boolean matchesAnyOrder = knownOrderIds.stream()
-                    .anyMatch(id -> event.rawBody() != null && event.rawBody().contains(id));
+                boolean matchesOrder = (event.customId() != null && knownShopOrderIds.contains(event.customId()))
+                    || (event.paypalOrderId() != null && knownPaypalOrderIds.contains(event.paypalOrderId()))
+                    || (event.resourceId() != null && knownPaypalOrderIds.contains(event.resourceId()));
 
-                if (!matchesAnyOrder) {
+                if (!matchesOrder) {
                     totalEvaluated++;
                     DetectionSnapshot orphanSnapshot = DetectionSnapshot.builder()
                         .targetId(event.resourceId() != null ? event.resourceId() : "CAP-" + event.paypalEventId())
@@ -137,29 +134,40 @@ public class CaseDetectionService {
         );
     }
 
+    @EventListener
+    public void onDuplicateWebhookDelivered(DuplicateWebhookDeliveredEvent domainEvent) {
+        if (domainEvent == null || domainEvent.paypalEventId() == null) {
+            return;
+        }
+        webhookEventRepository.findByPaypalEventId(domainEvent.paypalEventId())
+            .ifPresent(this::detectForEvent);
+    }
+
     /**
-     * Runs detectors immediately following the processing of a specific webhook event.
-     *
-     * @param event the processed webhook event
+     * Runs detectors immediately following the processing or duplicate delivery of a webhook event,
+     * matching strictly via indexed custom_id / paypal_order_id columns.
      */
     public void detectForEvent(WebhookEvent event) {
-        if (event == null) {
+        if (event == null || !event.verified()) {
             return;
         }
 
         try {
             log.debug("Running event-driven detection for event id={}, type={}", event.id(), event.eventType());
-            List<WebhookEvent> events = List.of(event);
 
-            // Attempt to resolve associated shop order
             ShopOrder targetOrder = null;
-            List<ShopOrder> recentOrders = shopOrderService.findAllOrders(50, 0);
-            for (ShopOrder order : recentOrders) {
-                if (event.rawBody() != null && (event.rawBody().contains(order.id())
-                    || (order.paypalOrderId() != null && event.rawBody().contains(order.paypalOrderId())))) {
-                    targetOrder = order;
-                    break;
-                }
+            if (event.customId() != null && !event.customId().isBlank()) {
+                targetOrder = shopOrderService.findOrderById(event.customId()).orElse(null);
+            }
+            if (targetOrder == null && event.paypalOrderId() != null && !event.paypalOrderId().isBlank()) {
+                targetOrder = shopOrderService.findOrderByPayPalOrderId(event.paypalOrderId()).orElse(null);
+            }
+
+            List<WebhookEvent> events = targetOrder != null
+                ? webhookEventRepository.findByOrderRefs(targetOrder.id(), targetOrder.paypalOrderId(), null)
+                : List.of(event);
+            if (events.isEmpty()) {
+                events = List.of(event);
             }
 
             DetectionSnapshot snapshot = targetOrder != null
@@ -182,17 +190,20 @@ public class CaseDetectionService {
         }
     }
 
-    private DetectionSnapshot buildSnapshotForOrder(ShopOrder order, List<WebhookEvent> allEvents) {
+    private DetectionSnapshot buildSnapshotForOrder(ShopOrder order, List<WebhookEvent> candidateEvents) {
         List<PaymentRecord> payments = shopOrderService.findPaymentByOrderId(order.id())
             .map(List::of)
             .orElse(List.of());
 
         List<RefundRecord> refunds = shopOrderService.getRefundsByOrderId(order.id());
 
-        List<WebhookEvent> relevantEvents = allEvents.stream()
-            .filter(e -> (order.paypalOrderId() != null && e.rawBody() != null && e.rawBody().contains(order.paypalOrderId()))
-                      || (e.rawBody() != null && e.rawBody().contains(order.id()))
-                      || (payments.stream().anyMatch(p -> p.paypalCaptureId() != null && Objects.equals(p.paypalCaptureId(), e.resourceId()))))
+        List<WebhookEvent> relevantEvents = candidateEvents.stream()
+            .filter(WebhookEvent::verified)
+            .filter(e -> Objects.equals(order.id(), e.customId())
+                      || (order.paypalOrderId() != null && Objects.equals(order.paypalOrderId(), e.paypalOrderId()))
+                      || (order.paypalOrderId() != null && Objects.equals(order.paypalOrderId(), e.resourceId()))
+                      || (order.paypalCaptureId() != null && Objects.equals(order.paypalCaptureId(), e.resourceId()))
+                      || payments.stream().anyMatch(p -> p.paypalCaptureId() != null && Objects.equals(p.paypalCaptureId(), e.resourceId())))
             .toList();
 
         DetectionSnapshot.Builder builder = DetectionSnapshot.builder()
@@ -204,8 +215,6 @@ public class CaseDetectionService {
             .evaluatedAt(clock.instant())
             .gracePeriod(Duration.ZERO);
 
-        // If captured via PayPal API (> 60s ago) and webhook still has not confirmed, expose capture summary
-        // so PaidNotMarkedDetector can open a PAID_NOT_MARKED case when webhooks are dropped.
         if (order.isAwaitingConfirmation()
             && payments.isEmpty()
             && order.capturedAt() != null

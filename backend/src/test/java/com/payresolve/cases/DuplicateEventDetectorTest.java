@@ -26,8 +26,9 @@ class DuplicateEventDetectorTest {
             1L, "EVT-1", "PAYMENT.CAPTURE.COMPLETED", "CAP-1", "{}", "{}", true, "PROCESSED", 1, t0, t0, null
         );
 
-        WebhookEvent repeatedAttemptEvent = new WebhookEvent(
-            2L, "EVT-2", "PAYMENT.CAPTURE.COMPLETED", "CAP-2", "{}", "{}", true, "PROCESSED", 2, t0, t0, null
+        // A processing retry (attempts = 2, delivery_count = 1) is NOT a duplicate delivery
+        WebhookEvent retriedEvent = new WebhookEvent(
+            2L, "EVT-2", "PAYMENT.CAPTURE.COMPLETED", "CAP-2", "{}", "{}", true, "PROCESSED", 2, 1, t0, t0, null
         );
 
         WebhookEvent duplicateIdEventA = new WebhookEvent(
@@ -42,75 +43,118 @@ class DuplicateEventDetectorTest {
         );
         PaymentRecord singlePayment = new PaymentRecord("PAY-SINGLE", "ORD-DUP", "CAP-DELIV-2", 3200L, "USD", "COMPLETED", t0);
 
+        WebhookEvent payloadMismatchEvent = new WebhookEvent(
+            9L, "EVT-MISMATCH", "PAYMENT.CAPTURE.COMPLETED", "CAP-MM", "{}", "{}", true, "PROCESSED",
+            1, t0, t0, null, 2, t0, t0, "ORD-DUP", "PP-DUP", null, true
+        );
+
+        WebhookEvent distinctCapture1 = new WebhookEvent(
+            10L, "EVT-CAP-1", "PAYMENT.CAPTURE.COMPLETED", "CAP-SAME", "{}", "{}", true, "PROCESSED", 1, t0, t0, null
+        );
+        WebhookEvent distinctCapture2 = new WebhookEvent(
+            11L, "EVT-CAP-2", "PAYMENT.CAPTURE.COMPLETED", "CAP-SAME", "{}", "{}", true, "PROCESSED", 1, t0, t0, null
+        );
+
+        WebhookEvent distinctApproved1 = new WebhookEvent(
+            12L, "EVT-APP-1", "CHECKOUT.ORDER.APPROVED", "PP-DUP", "{}", "{}", true, "PROCESSED", 1, t0, t0, null
+        );
+        WebhookEvent distinctApproved2 = new WebhookEvent(
+            13L, "EVT-APP-2", "CHECKOUT.ORDER.APPROVED", "PP-DUP", "{}", "{}", true, "PROCESSED", 1, t0, t0, null
+        );
+
         PaymentRecord payA = new PaymentRecord("PAY-1", "ORD-DUP", "CAP-DUP", 3200L, "USD", "COMPLETED", t0);
         PaymentRecord payB = new PaymentRecord("PAY-2", "ORD-DUP", "CAP-DUP", 3200L, "USD", "COMPLETED", t0);
 
         return Stream.of(
-            // POSITIVE: Attempts > 1
-            Arguments.of("Positive: Event with attempts = 2",
+            // NEGATIVE: Retried single delivery creates ZERO cases (check 2 removed)
+            Arguments.of("Negative: Retried event (attempts = 2, delivery_count = 1)",
                 DetectionSnapshot.builder()
                     .shopOrder(order)
-                    .addWebhookEvent(repeatedAttemptEvent)
+                    .addWebhookEvent(retriedEvent)
                     .build(),
-                1, CaseType.DUPLICATE_EVENT, CaseSeverity.MEDIUM),
+                0, null, null, null),
 
-            // POSITIVE: Repeated event IDs
-            Arguments.of("Positive: Same event ID received twice",
-                DetectionSnapshot.builder()
-                    .shopOrder(order)
-                    .addWebhookEvent(duplicateIdEventA)
-                    .addWebhookEvent(duplicateIdEventB)
-                    .build(),
-                1, CaseType.DUPLICATE_EVENT, CaseSeverity.MEDIUM),
-
-            // POSITIVE: Repeated capture payment records
-            Arguments.of("Positive: Duplicate payment records for same capture",
-                DetectionSnapshot.builder()
-                    .shopOrder(order)
-                    .addShopPayment(payA)
-                    .addShopPayment(payB)
-                    .build(),
-                1, CaseType.DUPLICATE_EVENT, CaseSeverity.MEDIUM),
-
-            // POSITIVE: delivery_count > 1 where shop order was marked paid once
-            Arguments.of("Positive: Event delivered twice and shop order marked paid once",
+            // POSITIVE (LOW, RESOLVED): delivery_count > 1 where business effect ran once
+            Arguments.of("Positive informational: Verified delivery twice with single payment effect",
                 DetectionSnapshot.builder()
                     .shopOrder(order)
                     .addWebhookEvent(deliveredTwiceEvent)
                     .addShopPayment(singlePayment)
                     .build(),
-                1, CaseType.DUPLICATE_EVENT, CaseSeverity.MEDIUM),
+                1, CaseType.DUPLICATE_EVENT, CaseSeverity.LOW, CaseStatus.RESOLVED),
 
-            // NEGATIVE: Normal single event with attempts = 1
+            // POSITIVE (HIGH, OPEN): Repeated payment records for same capture
+            Arguments.of("Positive high: Duplicate payment records for same capture",
+                DetectionSnapshot.builder()
+                    .shopOrder(order)
+                    .addShopPayment(payA)
+                    .addShopPayment(payB)
+                    .build(),
+                1, CaseType.DUPLICATE_EVENT, CaseSeverity.HIGH, CaseStatus.OPEN),
+
+            // POSITIVE (HIGH, OPEN): Same event ID carried conflicting payloads
+            Arguments.of("Positive high: Same event ID carried conflicting payloads",
+                DetectionSnapshot.builder()
+                    .shopOrder(order)
+                    .addWebhookEvent(payloadMismatchEvent)
+                    .build(),
+                1, CaseType.DUPLICATE_EVENT, CaseSeverity.HIGH, CaseStatus.OPEN),
+
+            // POSITIVE (HIGH, OPEN): Repeated event IDs
+            Arguments.of("Positive high: Same event ID received twice in event log",
+                DetectionSnapshot.builder()
+                    .shopOrder(order)
+                    .addWebhookEvent(duplicateIdEventA)
+                    .addWebhookEvent(duplicateIdEventB)
+                    .build(),
+                1, CaseType.DUPLICATE_EVENT, CaseSeverity.HIGH, CaseStatus.OPEN),
+
+            // POSITIVE (HIGH, OPEN): Multiple PAYMENT.CAPTURE.COMPLETED events for same capture
+            Arguments.of("Positive high: Two distinct PAYMENT.CAPTURE.COMPLETED events for same resource",
+                DetectionSnapshot.builder()
+                    .shopOrder(order)
+                    .addWebhookEvent(distinctCapture1)
+                    .addWebhookEvent(distinctCapture2)
+                    .build(),
+                1, CaseType.DUPLICATE_EVENT, CaseSeverity.HIGH, CaseStatus.OPEN),
+
+            // NEGATIVE: Multiple CHECKOUT.ORDER.APPROVED events ignored by check 4 (only capture/refund)
+            Arguments.of("Negative: Two CHECKOUT.ORDER.APPROVED events for same order do not trigger check 4",
+                DetectionSnapshot.builder()
+                    .shopOrder(order)
+                    .addWebhookEvent(distinctApproved1)
+                    .addWebhookEvent(distinctApproved2)
+                    .build(),
+                0, null, null, null),
+
+            // NEGATIVE: Normal single event
             Arguments.of("Negative: Single event, 1 attempt",
                 DetectionSnapshot.builder()
                     .shopOrder(order)
                     .addWebhookEvent(singleAttemptEvent)
                     .build(),
-                0, null, null),
+                0, null, null, null),
 
             // EDGE CASE: Empty snapshot
             Arguments.of("Edge case: Empty snapshot",
                 DetectionSnapshot.builder()
                     .shopOrder(order)
                     .build(),
-                0, null, null),
-
-            // EDGE CASE: Distinct events with attempts = 1
-            Arguments.of("Edge case: Distinct events with attempts = 1",
-                DetectionSnapshot.builder()
-                    .shopOrder(order)
-                    .addWebhookEvent(singleAttemptEvent)
-                    .addWebhookEvent(new WebhookEvent(6L, "EVT-6", "CHECKOUT.ORDER.APPROVED", "ORD-DUP", "{}", "{}", true, "PROCESSED", 1, t0, t0, null))
-                    .build(),
-                0, null, null)
+                0, null, null, null)
         );
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("provideScenarios")
     @DisplayName("Table-driven tests for DUPLICATE_EVENT detector")
-    void shouldEvaluateScenarios(String name, DetectionSnapshot snapshot, int expectedCount, CaseType expectedType, CaseSeverity expectedSeverity) {
+    void shouldEvaluateScenarios(
+        String name,
+        DetectionSnapshot snapshot,
+        int expectedCount,
+        CaseType expectedType,
+        CaseSeverity expectedSeverity,
+        CaseStatus expectedStatus
+    ) {
         List<DetectionFinding> findings = detector.detect(snapshot);
         assertThat(findings).hasSize(expectedCount);
 
@@ -118,7 +162,10 @@ class DuplicateEventDetectorTest {
             DetectionFinding finding = findings.getFirst();
             assertThat(finding.type()).isEqualTo(expectedType);
             assertThat(finding.severity()).isEqualTo(expectedSeverity);
-            assertThat(finding.summary()).contains("Duplicate");
+            assertThat(finding.initialStatus()).isEqualTo(expectedStatus);
+            if (expectedSeverity == CaseSeverity.LOW && expectedStatus == CaseStatus.RESOLVED) {
+                assertThat(finding.summary()).isEqualTo(DuplicateEventDetector.INFORMATIONAL_SUMMARY);
+            }
         }
     }
 }

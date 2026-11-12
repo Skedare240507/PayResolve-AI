@@ -51,14 +51,24 @@ class WebhookIngestIntegrationTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private com.payresolve.common.RateLimitService rateLimitService;
+
     @MockitoBean
     private PayPalWebhookVerificationClient verificationClient;
 
     @BeforeEach
     void setUp() {
         faultSwitches.reset();
+        rateLimitService.resetAll();
+        jdbcClient.sql("DELETE FROM case_evidence").update();
+        jdbcClient.sql("DELETE FROM investigation_steps").update();
+        jdbcClient.sql("DELETE FROM investigations").update();
+        jdbcClient.sql("DELETE FROM proposed_actions").update();
+        jdbcClient.sql("DELETE FROM cases").update();
         jdbcClient.sql("DELETE FROM payments").update();
         jdbcClient.sql("DELETE FROM shop_orders").update();
+        jdbcClient.sql("DELETE FROM rejected_webhooks").update();
         jdbcClient.sql("DELETE FROM webhook_events").update();
     }
 
@@ -130,25 +140,30 @@ class WebhookIngestIntegrationTest {
     }
 
     @Test
-    @DisplayName("2. Unverified webhook is stored with verified=false and never processed by worker")
-    void shouldStoreUnverifiedWebhookAndNeverProcess() throws Exception {
+    @DisplayName("2. Unverified webhook goes into rejected_webhooks only, never enters webhook_events or creates pending work")
+    void shouldQuarantineUnverifiedWebhookInRejectedTable() throws Exception {
         when(verificationClient.verifySignature(any(), any())).thenReturn(false);
 
         shopOrderService.createOrder("ORDER-102", "PP-ORD-102", Money.parse("25.00", "USD"), "Bob Fake");
         String payload = sampleCaptureCompletedPayload("WH-EVT-BAD", "CAP-BAD", "ORDER-102", "25.00");
 
         mockMvc.perform(post("/api/webhooks/paypal")
+                .with(req -> { req.setRemoteAddr("198.51.100.120"); return req; })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UNVERIFIED"))
                 .andExpect(jsonPath("$.verified").value(false));
 
-        WebhookEvent event = repository.findByPaypalEventId("WH-EVT-BAD").orElseThrow();
-        assertThat(event.verified()).isFalse();
-        assertThat(event.status()).isEqualTo("FAILED");
+        // Main inbox webhook_events has ZERO rows
+        assertThat(repository.findByPaypalEventId("WH-EVT-BAD")).isEmpty();
 
-        // Worker should skip unverified events
+        // Quarantined in rejected_webhooks with SHA-256 and IP
+        Integer rejectedCount = jdbcClient.sql("SELECT COUNT(*) FROM rejected_webhooks WHERE paypal_event_id = 'WH-EVT-BAD' AND ip = '198.51.100.120'")
+                .query(Integer.class).single();
+        assertThat(rejectedCount).isEqualTo(1);
+
+        // Worker skips and order stays PENDING
         int processed = workerService.processBatch(10);
         assertThat(processed).isEqualTo(0);
 
@@ -357,5 +372,140 @@ class WebhookIngestIntegrationTest {
 
         ShopOrder order = shopOrderService.findOrderById("ORDER-REPLAY-API").orElseThrow();
         assertThat(order.status()).isEqualTo("PAID");
+    }
+
+    @Test
+    @DisplayName("9. Retried single verified delivery (attempts = 2) creates ZERO open DUPLICATE_EVENT case")
+    void retriedSingleDeliveryCreatesNoCase() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+
+        shopOrderService.createOrder("ORDER-RETRY-OK", "PP-ORD-RETRY-OK", Money.parse("50.00", "USD"), "Retry Buyer");
+        String payload = sampleCaptureCompletedPayload("WH-RETRY-OK", "CAP-RETRY-OK", "ORDER-RETRY-OK", "50.00");
+
+        mockMvc.perform(post("/api/webhooks/paypal")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isOk());
+
+        // Attempt 1 fails due to transient fault switch
+        faultSwitches.setFailWebhookHandler(true);
+        assertThat(workerService.processBatch(10)).isEqualTo(0);
+
+        // Turn off fault switch, wait past 50ms backoff, attempt 2 succeeds
+        faultSwitches.setFailWebhookHandler(false);
+        Thread.sleep(75);
+        assertThat(workerService.processBatch(10)).isEqualTo(1);
+
+        WebhookEvent event = repository.findByPaypalEventId("WH-RETRY-OK").orElseThrow();
+        assertThat(event.attempts()).isEqualTo(2);
+        assertThat(event.deliveryCount()).isEqualTo(1);
+
+        Integer openDupCases = jdbcClient.sql("SELECT COUNT(*) FROM cases WHERE type = 'DUPLICATE_EVENT' AND status <> 'RESOLVED'")
+                .query(Integer.class).single();
+        assertThat(openDupCases).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("10. Two verified deliveries create one LOW/RESOLVED informational case, one payment effect, and count toward duplicates blocked")
+    void twoVerifiedDeliveriesCreateResolvedInformationalCase() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+
+        shopOrderService.createOrder("ORDER-DUP-INFO", "PP-ORD-DUP-INFO", Money.parse("40.00", "USD"), "Dup Buyer");
+        String payload = sampleCaptureCompletedPayload("WH-DUP-INFO", "CAP-DUP-INFO", "ORDER-DUP-INFO", "40.00");
+
+        // Delivery 1 + process
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk());
+        assertThat(workerService.processBatch(10)).isEqualTo(1);
+
+        // Delivery 2 (verified duplicate)
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.duplicate").value(true));
+
+        // Exactly 1 payment record
+        Integer paymentCount = jdbcClient.sql("SELECT COUNT(*) FROM payments WHERE paypal_capture_id = 'CAP-DUP-INFO'")
+                .query(Integer.class).single();
+        assertThat(paymentCount).isEqualTo(1);
+
+        // One LOW/RESOLVED informational DUPLICATE_EVENT case created
+        var row = jdbcClient.sql("SELECT status, severity, summary FROM cases WHERE type = 'DUPLICATE_EVENT'")
+                .query((rs, n) -> java.util.List.of(rs.getString("status"), rs.getString("severity"), rs.getString("summary")))
+                .single();
+        assertThat(row.get(0)).isEqualTo("RESOLVED");
+        assertThat(row.get(1)).isEqualTo("LOW");
+        assertThat(row.get(2)).isEqualTo("Duplicate delivery absorbed by idempotency; business effect ran once");
+
+        // Counts toward duplicatesBlockedToday and NOT openCount
+        mockMvc.perform(get("/api/cases/stats").with(user("viewer").roles("VIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.openCount").value(0))
+                .andExpect(jsonPath("$.duplicatesBlockedToday").value(1));
+    }
+
+    @Test
+    @DisplayName("11. Forged unverified delivery with a real event ID changes nothing; unverified placeholder upgrades on verified arrival")
+    void forgedUnverifiedDeliveryCannotPoisonExistingEvent() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+        shopOrderService.createOrder("ORDER-POISON", "PP-ORD-POISON", Money.parse("33.00", "USD"), "Safe Buyer");
+        String legitimate = sampleCaptureCompletedPayload("WH-POISON-1", "CAP-POISON-1", "ORDER-POISON", "33.00");
+
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(legitimate))
+                .andExpect(status().isOk());
+
+        // Now attacker sends an unverified forged payload with the same paypal_event_id WH-POISON-1
+        when(verificationClient.verifySignature(any(), any())).thenReturn(false);
+        String forged = sampleCaptureCompletedPayload("WH-POISON-1", "CAP-FORGED", "ORDER-POISON", "999.00");
+        mockMvc.perform(post("/api/webhooks/paypal")
+                .with(req -> { req.setRemoteAddr("198.51.100.200"); return req; })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(forged))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified").value(false));
+
+        WebhookEvent untouched = repository.findByPaypalEventId("WH-POISON-1").orElseThrow();
+        assertThat(untouched.verified()).isTrue();
+        assertThat(untouched.deliveryCount()).isEqualTo(1);
+        assertThat(untouched.rawBody()).contains("CAP-POISON-1").doesNotContain("CAP-FORGED");
+
+        // Verify upgrade-in-place if an unverified row existed directly in webhook_events
+        repository.insert("WH-UPGRADE-1", "PAYMENT.CAPTURE.COMPLETED", "CAP-FAKE", "{\"forged\":true}", null, false, "UNVERIFIED");
+        String realPayload = sampleCaptureCompletedPayload("WH-UPGRADE-1", "CAP-POISON-1", "ORDER-POISON", "33.00");
+        repository.upsert("WH-UPGRADE-1", "PAYMENT.CAPTURE.COMPLETED", "CAP-POISON-1", realPayload, null, true, "PENDING", null, "ORDER-POISON", "PP-ORD-POISON");
+        WebhookEvent upgraded = repository.findByPaypalEventId("WH-UPGRADE-1").orElseThrow();
+        assertThat(upgraded.verified()).isTrue();
+        assertThat(upgraded.status()).isEqualTo("PENDING");
+        assertThat(upgraded.deliveryCount()).isEqualTo(1);
+        assertThat(upgraded.rawBody()).contains("CAP-POISON-1");
+    }
+
+    @Test
+    @DisplayName("12. Arrival race: webhook arriving before order is linked re-queues with next_attempt_at without incrementing attempts")
+    void arrivalRaceRequeuesWithoutFailureThenApplies() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+        String payload = sampleCaptureCompletedPayload("WH-RACE-1", "CAP-RACE-1", "ORDER-RACE-1", "75.00");
+
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk());
+
+        // Order does not exist yet -> re-queues with next_attempt_at, attempts remains 0, status remains PENDING
+        assertThat(workerService.processBatch(10)).isEqualTo(0);
+        WebhookEvent waiting = repository.findByPaypalEventId("WH-RACE-1").orElseThrow();
+        assertThat(waiting.status()).isEqualTo("PENDING");
+        assertThat(waiting.attempts()).isEqualTo(0);
+        assertThat(waiting.nextAttemptAt()).isNotNull();
+
+        // Immediate poll before next_attempt_at claims nothing
+        assertThat(workerService.processBatch(10)).isEqualTo(0);
+
+        // Order is created/linked and next_attempt_at becomes due
+        shopOrderService.createOrder("ORDER-RACE-1", "PP-ORD-RACE-1", Money.parse("75.00", "USD"), "Race Buyer");
+        jdbcClient.sql("UPDATE webhook_events SET next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1' SECOND WHERE paypal_event_id = 'WH-RACE-1'")
+                .update();
+
+        assertThat(workerService.processBatch(10)).isEqualTo(1);
+        ShopOrder order = shopOrderService.findOrderById("ORDER-RACE-1").orElseThrow();
+        assertThat(order.status()).isEqualTo("PAID");
+        assertThat(repository.findByPaypalEventId("WH-RACE-1").orElseThrow().attempts()).isEqualTo(1);
     }
 }

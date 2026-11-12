@@ -389,39 +389,7 @@ export const api = {
       return fetchApi<PagedResponseCaseDto>(`/api/cases${qs ? '?' + qs : ''}`);
     },
 
-    stats: async (): Promise<CaseQueueStats> => {
-      try {
-        const res = await fetchApi<PagedResponseCaseDto>('/api/cases?size=100');
-        const items = res.content || [];
-        const open = items.filter((c) => c.status === 'OPEN').length;
-        const actionProposed = items.filter((c) => c.status === 'ACTION_PROPOSED').length;
-        return {
-          total: items.length,
-          open,
-          investigating: items.filter((c) => c.status === 'INVESTIGATING').length,
-          actionProposed,
-          resolved: items.filter((c) => c.status === 'RESOLVED').length,
-          dismissed: items.filter((c) => c.status === 'DISMISSED').length,
-          openCount: open || 12,
-          awaitingApprovalCount: actionProposed || 3,
-          duplicatesBlockedToday: 7,
-          oldestOpenMinutes: 38,
-        };
-      } catch {
-        return {
-          total: 12,
-          open: 12,
-          investigating: 1,
-          actionProposed: 3,
-          resolved: 1,
-          dismissed: 0,
-          openCount: 12,
-          awaitingApprovalCount: 3,
-          duplicatesBlockedToday: 7,
-          oldestOpenMinutes: 38,
-        };
-      }
-    },
+    stats: (): Promise<CaseQueueStats> => fetchApi<CaseQueueStats>('/api/cases/stats'),
 
     getById: (id: string) => fetchApi<CaseDetailsDto>(`/api/cases/${id}`),
 

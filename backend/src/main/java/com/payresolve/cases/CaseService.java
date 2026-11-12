@@ -2,8 +2,10 @@ package com.payresolve.cases;
 
 import com.payresolve.cases.dto.CaseDetailsDto;
 import com.payresolve.cases.dto.CaseDto;
+import com.payresolve.cases.dto.CaseQueueStatsDto;
 import com.payresolve.cases.dto.PagedResponse;
 import com.payresolve.common.Money;
+import com.payresolve.ingest.EventQueryService;
 import com.payresolve.shop.ShopOrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,11 +29,18 @@ public class CaseService {
 
     private final CaseRepository caseRepository;
     private final ShopOrderService shopOrderService;
+    private final EventQueryService eventQueryService;
     private final Clock clock;
 
-    public CaseService(CaseRepository caseRepository, ShopOrderService shopOrderService, Clock clock) {
+    public CaseService(
+        CaseRepository caseRepository,
+        ShopOrderService shopOrderService,
+        EventQueryService eventQueryService,
+        Clock clock
+    ) {
         this.caseRepository = caseRepository;
         this.shopOrderService = shopOrderService;
+        this.eventQueryService = eventQueryService;
         this.clock = clock;
     }
 
@@ -76,10 +86,21 @@ public class CaseService {
             log.info("Rerun update for existing case: id={}, type={}, order={}",
                 existing.id(), existing.type(), paypalOrderId);
 
+            // Reopen only if an informational RESOLVED duplicate escalated into a HIGH OPEN failure
+            CaseStatus nextStatus = existing.status();
+            Instant nextResolvedAt = existing.resolvedAt();
+            if (existing.status() == CaseStatus.RESOLVED
+                && finding.initialStatus() == CaseStatus.OPEN
+                && finding.severity() == CaseSeverity.HIGH) {
+                nextStatus = CaseStatus.OPEN;
+                nextResolvedAt = null;
+                caseRepository.updateStatus(existing.id(), CaseStatus.OPEN, null);
+            }
+
             CaseRecord updated = new CaseRecord(
                 existing.id(),
                 existing.type(),
-                existing.status(), // Keep existing lifecycle status
+                nextStatus,
                 finding.severity(),
                 paypalOrderId,
                 finding.shopOrderId() != null ? finding.shopOrderId() : existing.shopOrderId(),
@@ -87,7 +108,7 @@ public class CaseService {
                 currency,
                 existing.openedAt(),
                 now,
-                existing.resolvedAt(),
+                nextResolvedAt,
                 finding.summary()
             );
 
@@ -95,10 +116,12 @@ public class CaseService {
             return updated;
         } else {
             String newId = generateNextCaseId();
+            CaseStatus initialStatus = finding.initialStatus();
+            Instant resolvedAt = initialStatus.isTerminal() ? now : null;
             CaseRecord newCase = new CaseRecord(
                 newId,
                 finding.type(),
-                CaseStatus.OPEN,
+                initialStatus,
                 finding.severity(),
                 paypalOrderId,
                 finding.shopOrderId(),
@@ -106,13 +129,43 @@ public class CaseService {
                 currency,
                 now,
                 now,
-                null,
+                resolvedAt,
                 finding.summary()
             );
 
             caseRepository.insert(newCase);
             return newCase;
         }
+    }
+
+    public CaseQueueStatsDto getQueueStats() {
+        long open = caseRepository.countAll("OPEN", null, null, null);
+        long investigating = caseRepository.countAll("INVESTIGATING", null, null, null);
+        long actionProposed = caseRepository.countAll("ACTION_PROPOSED", null, null, null);
+        long resolved = caseRepository.countAll("RESOLVED", null, null, null);
+        long dismissed = caseRepository.countAll("DISMISSED", null, null, null);
+        long total = open + investigating + actionProposed + resolved + dismissed;
+
+        long redundantDeliveries = eventQueryService.countVerifiedDuplicateDeliveriesBlocked();
+        long resolvedDupCases = caseRepository.countResolvedDuplicateCases();
+        long duplicatesBlocked = Math.max(redundantDeliveries, resolvedDupCases);
+
+        long oldestOpenMinutes = caseRepository.findOldestOpenCaseOpenedAt()
+            .map(openedAt -> Math.max(0L, Duration.between(openedAt, clock.instant()).toMinutes()))
+            .orElse(0L);
+
+        return new CaseQueueStatsDto(
+            total,
+            open,
+            investigating,
+            actionProposed,
+            resolved,
+            dismissed,
+            open,
+            actionProposed,
+            duplicatesBlocked,
+            oldestOpenMinutes
+        );
     }
 
     public CaseRecord getCaseRecordById(String id) {

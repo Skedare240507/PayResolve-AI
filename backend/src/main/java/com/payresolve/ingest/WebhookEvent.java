@@ -22,7 +22,9 @@ public record WebhookEvent(
     Instant lastReceivedAt,
     Instant eventCreatedAt,
     String customId,
-    String paypalOrderId
+    String paypalOrderId,
+    Instant nextAttemptAt,
+    boolean payloadMismatch
 ) {
     public WebhookEvent(
         Long id,
@@ -39,7 +41,7 @@ public record WebhookEvent(
         String lastError
     ) {
         this(id, paypalEventId, eventType, resourceId, rawBody, headersJson, verified, status, attempts,
-             receivedAt, processedAt, lastError, 1, receivedAt, null, null, null);
+             receivedAt, processedAt, lastError, 1, receivedAt, null, null, null, null, false);
     }
 
     public WebhookEvent(
@@ -58,7 +60,31 @@ public record WebhookEvent(
         String lastError
     ) {
         this(id, paypalEventId, eventType, resourceId, rawBody, headersJson, verified, status, attempts,
-             receivedAt, processedAt, lastError, deliveryCount, receivedAt, null, null, null);
+             receivedAt, processedAt, lastError, deliveryCount, receivedAt, null, null, null, null, false);
+    }
+
+    public WebhookEvent(
+        Long id,
+        String paypalEventId,
+        String eventType,
+        String resourceId,
+        String rawBody,
+        String headersJson,
+        boolean verified,
+        String status,
+        int attempts,
+        Instant receivedAt,
+        Instant processedAt,
+        String lastError,
+        int deliveryCount,
+        Instant lastReceivedAt,
+        Instant eventCreatedAt,
+        String customId,
+        String paypalOrderId
+    ) {
+        this(id, paypalEventId, eventType, resourceId, rawBody, headersJson, verified, status, attempts,
+             receivedAt, processedAt, lastError, deliveryCount, lastReceivedAt, eventCreatedAt,
+             customId, paypalOrderId, null, false);
     }
 
     public boolean isPending() {

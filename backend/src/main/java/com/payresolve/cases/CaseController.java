@@ -2,6 +2,7 @@ package com.payresolve.cases;
 
 import com.payresolve.cases.dto.CaseDetailsDto;
 import com.payresolve.cases.dto.CaseDto;
+import com.payresolve.cases.dto.CaseQueueStatsDto;
 import com.payresolve.cases.dto.CaseStatusUpdateRequest;
 import com.payresolve.cases.dto.DetectionRunResultDto;
 import com.payresolve.cases.dto.PagedResponse;
@@ -46,6 +47,12 @@ public class CaseController {
     ) {
         PagedResponse<CaseDto> result = caseService.getCases(status, severity, type, search, page, size);
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Retrieve live queue counts and duplicates-blocked KPI")
+    public ResponseEntity<CaseQueueStatsDto> getQueueStats() {
+        return ResponseEntity.ok(caseService.getQueueStats());
     }
 
     @GetMapping("/{id}")

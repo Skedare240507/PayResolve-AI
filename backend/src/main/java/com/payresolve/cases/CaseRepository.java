@@ -207,6 +207,27 @@ public class CaseRepository {
         return count != null ? count : 0L;
     }
 
+    public long countResolvedDuplicateCases() {
+        Long count = jdbcClient.sql("""
+            SELECT COUNT(*) FROM cases
+            WHERE type = 'DUPLICATE_EVENT' AND status = 'RESOLVED'
+            """)
+            .query(Long.class)
+            .single();
+        return count != null ? count : 0L;
+    }
+
+    public Optional<Instant> findOldestOpenCaseOpenedAt() {
+        return jdbcClient.sql("""
+            SELECT opened_at FROM cases
+            WHERE status IN ('OPEN', 'INVESTIGATING', 'ACTION_PROPOSED')
+            ORDER BY opened_at ASC
+            LIMIT 1
+            """)
+            .query((rs, n) -> rs.getTimestamp("opened_at").toInstant())
+            .optional();
+    }
+
     private void applyFilters(StringBuilder sql, Map<String, Object> params, String status, String severity, String type, String search) {
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
             try {

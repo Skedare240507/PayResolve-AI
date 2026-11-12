@@ -17,7 +17,18 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     event_created_at TIMESTAMP WITH TIME ZONE,
     custom_id VARCHAR(100),
     paypal_order_id VARCHAR(100),
+    next_attempt_at TIMESTAMP WITH TIME ZONE,
+    payload_mismatch BOOLEAN DEFAULT FALSE NOT NULL,
     last_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS rejected_webhooks (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    paypal_event_id VARCHAR(100),
+    reason VARCHAR(255) NOT NULL,
+    body_sha256 VARCHAR(64) NOT NULL,
+    ip VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS products (

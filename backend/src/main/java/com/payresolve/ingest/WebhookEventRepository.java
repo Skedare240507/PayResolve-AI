@@ -28,13 +28,19 @@ public class WebhookEventRepository {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookEventRepository.class);
 
+    private static final String SELECT_COLUMNS = """
+        id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
+        received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at,
+        custom_id, paypal_order_id, next_attempt_at, payload_mismatch
+        """;
+
     private final JdbcClient jdbcClient;
     private final Clock clock;
     private final boolean isPostgres;
 
     private final RowMapper<WebhookEvent> rowMapper = new WebhookEventRowMapper();
 
-    public record WebhookUpsertResult(Long id, int deliveryCount) {}
+    public record WebhookUpsertResult(Long id, int deliveryCount, boolean upgradedFromUnverified, boolean payloadMismatch) {}
 
     public WebhookEventRepository(JdbcClient jdbcClient, Clock clock, DataSource dataSource) {
         this.jdbcClient = jdbcClient;
@@ -51,12 +57,7 @@ public class WebhookEventRepository {
 
     public Optional<WebhookEvent> findByPaypalEventId(String paypalEventId) {
         Objects.requireNonNull(paypalEventId, "paypalEventId must not be null");
-        return jdbcClient.sql("""
-            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
-            FROM webhook_events
-            WHERE paypal_event_id = :paypalEventId
-            """)
+        return jdbcClient.sql("SELECT " + SELECT_COLUMNS + " FROM webhook_events WHERE paypal_event_id = :paypalEventId")
             .param("paypalEventId", paypalEventId)
             .query(rowMapper)
             .optional();
@@ -64,25 +65,14 @@ public class WebhookEventRepository {
 
     public Optional<WebhookEvent> findById(Long id) {
         Objects.requireNonNull(id, "id must not be null");
-        return jdbcClient.sql("""
-            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
-            FROM webhook_events
-            WHERE id = :id
-            """)
+        return jdbcClient.sql("SELECT " + SELECT_COLUMNS + " FROM webhook_events WHERE id = :id")
             .param("id", id)
             .query(rowMapper)
             .optional();
     }
 
     public List<WebhookEvent> findAll(int limit, int offset) {
-        return jdbcClient.sql("""
-            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
-            FROM webhook_events
-            ORDER BY received_at DESC, id DESC
-            LIMIT :limit OFFSET :offset
-            """)
+        return jdbcClient.sql("SELECT " + SELECT_COLUMNS + " FROM webhook_events ORDER BY received_at DESC, id DESC LIMIT :limit OFFSET :offset")
             .param("limit", limit)
             .param("offset", offset)
             .query(rowMapper)
@@ -95,62 +85,70 @@ public class WebhookEventRepository {
             .single();
     }
 
-    public Optional<Instant> findLastReceivedAt() {
-        Timestamp ts = jdbcClient.sql("SELECT MAX(COALESCE(last_received_at, received_at)) FROM webhook_events")
-            .query(Timestamp.class)
+    public long countVerifiedDuplicateDeliveriesBlocked() {
+        Long count = jdbcClient.sql("""
+            SELECT COALESCE(SUM(CASE WHEN verified = true AND delivery_count > 1 THEN delivery_count - 1 ELSE 0 END), 0)
+            FROM webhook_events
+            """)
+            .query(Long.class)
             .single();
-        return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
+        return count != null ? count : 0L;
+    }
+
+    public Optional<Instant> findLastReceivedAt() {
+        return jdbcClient.sql("""
+            SELECT COALESCE(last_received_at, received_at) AS ts
+            FROM webhook_events
+            ORDER BY COALESCE(last_received_at, received_at) DESC
+            LIMIT 1
+            """)
+            .query((rs, n) -> rs.getTimestamp("ts").toInstant())
+            .optional();
     }
 
     /**
-     * Finds webhook events matching a shop order by custom_id, paypal_order_id, resource_id, or raw body reference.
+     * Finds webhook events matching a shop order strictly via indexed columns
+     * (custom_id, paypal_order_id, resource_id), never via raw_body LIKE substring matching.
      */
     public List<WebhookEvent> findByOrderRefs(String shopOrderId, String paypalOrderId, String captureId) {
         List<String> clauses = new java.util.ArrayList<>();
         if (shopOrderId != null && !shopOrderId.isBlank()) {
             clauses.add("custom_id = :shopOrderId");
-            clauses.add("raw_body LIKE :shopOrderPattern");
         }
         if (paypalOrderId != null && !paypalOrderId.isBlank()) {
             clauses.add("paypal_order_id = :paypalOrderId");
             clauses.add("resource_id = :paypalOrderId");
-            clauses.add("raw_body LIKE :paypalOrderPattern");
         }
         if (captureId != null && !captureId.isBlank()) {
             clauses.add("resource_id = :captureId");
-            clauses.add("raw_body LIKE :capturePattern");
         }
         if (clauses.isEmpty()) {
             return List.of();
         }
 
-        String sql = """
-            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
-            FROM webhook_events
-            WHERE %s
-            ORDER BY received_at ASC, id ASC
-            """.formatted(String.join(" OR ", clauses));
+        String sql = "SELECT " + SELECT_COLUMNS + " FROM webhook_events WHERE "
+            + String.join(" OR ", clauses) + " ORDER BY received_at ASC, id ASC";
 
         var spec = jdbcClient.sql(sql);
         if (shopOrderId != null && !shopOrderId.isBlank()) {
-            spec = spec.param("shopOrderId", shopOrderId)
-                       .param("shopOrderPattern", "%" + shopOrderId + "%");
+            spec = spec.param("shopOrderId", shopOrderId);
         }
         if (paypalOrderId != null && !paypalOrderId.isBlank()) {
-            spec = spec.param("paypalOrderId", paypalOrderId)
-                       .param("paypalOrderPattern", "%" + paypalOrderId + "%");
+            spec = spec.param("paypalOrderId", paypalOrderId);
         }
         if (captureId != null && !captureId.isBlank()) {
-            spec = spec.param("captureId", captureId)
-                       .param("capturePattern", "%" + captureId + "%");
+            spec = spec.param("captureId", captureId);
         }
         return spec.query(rowMapper).list();
     }
 
     /**
-     * Inserts or updates incoming webhook event on conflict (paypal_event_id).
-     * If already present, increments delivery_count and updates last_received_at.
+     * Poisoning-resistant upsert for incoming webhooks:
+     * - Unverified deliveries never mutate an existing verified row, never increment delivery_count,
+     *   and never create PENDING work.
+     * - Verified deliveries upgrade any existing unverified row in place (verified=true, status=PENDING,
+     *   verified body, delivery_count=1).
+     * - Verified duplicate deliveries increment delivery_count and detect conflicting payloads.
      */
     public WebhookUpsertResult upsert(
         String paypalEventId,
@@ -169,22 +167,105 @@ public class WebhookEventRepository {
         Objects.requireNonNull(rawBody, "rawBody must not be null");
 
         Instant now = clock.instant();
+        Optional<WebhookEvent> existingOpt = findByPaypalEventId(paypalEventId);
 
+        if (existingOpt.isPresent()) {
+            WebhookEvent existing = existingOpt.get();
+
+            // Unverified deliveries NEVER modify an existing verified row and NEVER increment delivery_count
+            if (!verified) {
+                return new WebhookUpsertResult(existing.id(), existing.deliveryCount(), false, existing.payloadMismatch());
+            }
+
+            // Upgrade an unverified placeholder row cleanly in place to a verified PENDING row
+            if (!existing.verified()) {
+                String sql = isPostgres
+                    ? """
+                        UPDATE webhook_events
+                        SET event_type = :eventType,
+                            resource_id = :resourceId,
+                            raw_body = :rawBody,
+                            headers_json = CAST(:headersJson AS jsonb),
+                            verified = true,
+                            status = 'PENDING',
+                            attempts = 0,
+                            delivery_count = 1,
+                            last_error = NULL,
+                            last_received_at = :now,
+                            event_created_at = :eventCreatedAt,
+                            custom_id = :customId,
+                            paypal_order_id = :paypalOrderId,
+                            next_attempt_at = NULL,
+                            payload_mismatch = false
+                        WHERE id = :id
+                        """
+                    : """
+                        UPDATE webhook_events
+                        SET event_type = :eventType,
+                            resource_id = :resourceId,
+                            raw_body = :rawBody,
+                            headers_json = :headersJson,
+                            verified = true,
+                            status = 'PENDING',
+                            attempts = 0,
+                            delivery_count = 1,
+                            last_error = NULL,
+                            last_received_at = :now,
+                            event_created_at = :eventCreatedAt,
+                            custom_id = :customId,
+                            paypal_order_id = :paypalOrderId,
+                            next_attempt_at = NULL,
+                            payload_mismatch = false
+                        WHERE id = :id
+                        """;
+                jdbcClient.sql(sql)
+                    .param("id", existing.id())
+                    .param("eventType", eventType)
+                    .param("resourceId", resourceId)
+                    .param("rawBody", rawBody)
+                    .param("headersJson", headersJson)
+                    .param("now", Timestamp.from(now))
+                    .param("eventCreatedAt", eventCreatedAt != null ? Timestamp.from(eventCreatedAt) : null)
+                    .param("customId", customId)
+                    .param("paypalOrderId", paypalOrderId)
+                    .update();
+                return new WebhookUpsertResult(existing.id(), 1, true, false);
+            }
+
+            // Verified duplicate delivery: increment delivery_count and detect payload mismatch
+            boolean mismatch = existing.payloadMismatch() || !Objects.equals(normalizeBody(existing.rawBody()), normalizeBody(rawBody));
+            int nextDeliveryCount = existing.deliveryCount() + 1;
+            jdbcClient.sql("""
+                UPDATE webhook_events
+                SET delivery_count = :deliveryCount,
+                    last_received_at = :lastReceivedAt,
+                    payload_mismatch = :payloadMismatch
+                WHERE id = :id
+                """)
+                .param("deliveryCount", nextDeliveryCount)
+                .param("lastReceivedAt", Timestamp.from(now))
+                .param("payloadMismatch", mismatch)
+                .param("id", existing.id())
+                .update();
+
+            return new WebhookUpsertResult(existing.id(), nextDeliveryCount, false, mismatch);
+        }
+
+        // Insert new row (verified deliveries only enter normal inbox flow; unverified only if directly called)
+        String effectiveStatus = verified ? "PENDING" : status;
         if (isPostgres) {
             String sql = """
                 INSERT INTO webhook_events (
                     paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                    delivery_count, received_at, last_received_at, event_created_at, custom_id, paypal_order_id
+                    delivery_count, received_at, last_received_at, event_created_at, custom_id, paypal_order_id,
+                    next_attempt_at, payload_mismatch
                 ) VALUES (
                     :paypalEventId, :eventType, :resourceId, :rawBody, CAST(:headersJson AS jsonb), :verified, :status, 0,
-                    1, :receivedAt, :lastReceivedAt, :eventCreatedAt, :customId, :paypalOrderId
+                    :deliveryCount, :receivedAt, :lastReceivedAt, :eventCreatedAt, :customId, :paypalOrderId,
+                    NULL, false
                 )
-                ON CONFLICT (paypal_event_id) DO UPDATE SET
-                    delivery_count = webhook_events.delivery_count + 1,
-                    last_received_at = CURRENT_TIMESTAMP
                 RETURNING id, delivery_count
                 """;
-
             return jdbcClient.sql(sql)
                 .param("paypalEventId", paypalEventId)
                 .param("eventType", eventType)
@@ -192,59 +273,49 @@ public class WebhookEventRepository {
                 .param("rawBody", rawBody)
                 .param("headersJson", headersJson)
                 .param("verified", verified)
-                .param("status", status)
+                .param("status", effectiveStatus)
+                .param("deliveryCount", verified ? 1 : 0)
                 .param("receivedAt", Timestamp.from(now))
                 .param("lastReceivedAt", Timestamp.from(now))
                 .param("eventCreatedAt", eventCreatedAt != null ? Timestamp.from(eventCreatedAt) : null)
                 .param("customId", customId)
                 .param("paypalOrderId", paypalOrderId)
-                .query((rs, rowNum) -> new WebhookUpsertResult(rs.getLong("id"), rs.getInt("delivery_count")))
+                .query((rs, rowNum) -> new WebhookUpsertResult(rs.getLong("id"), rs.getInt("delivery_count"), false, false))
                 .single();
         } else {
-            // Portable logic for H2 test environment
-            Optional<WebhookEvent> existing = findByPaypalEventId(paypalEventId);
-            if (existing.isPresent()) {
-                WebhookEvent ev = existing.get();
-                int newDeliveryCount = ev.deliveryCount() + 1;
-                jdbcClient.sql("""
-                    UPDATE webhook_events
-                    SET delivery_count = :deliveryCount,
-                        last_received_at = :lastReceivedAt
-                    WHERE id = :id
-                    """)
-                    .param("deliveryCount", newDeliveryCount)
-                    .param("lastReceivedAt", Timestamp.from(now))
-                    .param("id", ev.id())
-                    .update();
-                return new WebhookUpsertResult(ev.id(), newDeliveryCount);
-            } else {
-                KeyHolder keyHolder = new GeneratedKeyHolder();
-                jdbcClient.sql("""
-                    INSERT INTO webhook_events (
-                        paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                        delivery_count, received_at, last_received_at, event_created_at, custom_id, paypal_order_id
-                    ) VALUES (
-                        :paypalEventId, :eventType, :resourceId, :rawBody, :headersJson, :verified, :status, 0,
-                        1, :receivedAt, :lastReceivedAt, :eventCreatedAt, :customId, :paypalOrderId
-                    )
-                    """)
-                    .param("paypalEventId", paypalEventId)
-                    .param("eventType", eventType)
-                    .param("resourceId", resourceId)
-                    .param("rawBody", rawBody)
-                    .param("headersJson", headersJson)
-                    .param("verified", verified)
-                    .param("status", status)
-                    .param("receivedAt", Timestamp.from(now))
-                    .param("lastReceivedAt", Timestamp.from(now))
-                    .param("eventCreatedAt", eventCreatedAt != null ? Timestamp.from(eventCreatedAt) : null)
-                    .param("customId", customId)
-                    .param("paypalOrderId", paypalOrderId)
-                    .update(keyHolder, "id");
-                long id = keyHolder.getKey() != null ? keyHolder.getKey().longValue() : 1L;
-                return new WebhookUpsertResult(id, 1);
-            }
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcClient.sql("""
+                INSERT INTO webhook_events (
+                    paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
+                    delivery_count, received_at, last_received_at, event_created_at, custom_id, paypal_order_id,
+                    next_attempt_at, payload_mismatch
+                ) VALUES (
+                    :paypalEventId, :eventType, :resourceId, :rawBody, :headersJson, :verified, :status, 0,
+                    :deliveryCount, :receivedAt, :lastReceivedAt, :eventCreatedAt, :customId, :paypalOrderId,
+                    NULL, false
+                )
+                """)
+                .param("paypalEventId", paypalEventId)
+                .param("eventType", eventType)
+                .param("resourceId", resourceId)
+                .param("rawBody", rawBody)
+                .param("headersJson", headersJson)
+                .param("verified", verified)
+                .param("status", effectiveStatus)
+                .param("deliveryCount", verified ? 1 : 0)
+                .param("receivedAt", Timestamp.from(now))
+                .param("lastReceivedAt", Timestamp.from(now))
+                .param("eventCreatedAt", eventCreatedAt != null ? Timestamp.from(eventCreatedAt) : null)
+                .param("customId", customId)
+                .param("paypalOrderId", paypalOrderId)
+                .update(keyHolder, "id");
+            long id = keyHolder.getKey() != null ? keyHolder.getKey().longValue() : 1L;
+            return new WebhookUpsertResult(id, verified ? 1 : 0, false, false);
         }
+    }
+
+    private String normalizeBody(String body) {
+        return body == null ? "" : body.replaceAll("\\s+", "");
     }
 
     public Long insert(
@@ -260,19 +331,20 @@ public class WebhookEventRepository {
     }
 
     /**
-     * Claims PENDING, verified webhook rows with FOR UPDATE SKIP LOCKED.
-     * Prevents race conditions across parallel worker instances or threads.
+     * Claims PENDING, verified webhook rows eligible for processing now with FOR UPDATE SKIP LOCKED.
      */
     public List<WebhookEvent> claimPendingEvents(int limit) {
-        return jdbcClient.sql("""
-            SELECT id, paypal_event_id, event_type, resource_id, raw_body, headers_json, verified, status, attempts,
-                   received_at, processed_at, last_error, delivery_count, last_received_at, event_created_at, custom_id, paypal_order_id
+        Timestamp nowTs = Timestamp.from(clock.instant());
+        return jdbcClient.sql("SELECT " + SELECT_COLUMNS + """
             FROM webhook_events
-            WHERE status = 'PENDING' AND verified = true
+            WHERE status = 'PENDING'
+              AND verified = true
+              AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
             ORDER BY received_at ASC
             LIMIT :limit
             FOR UPDATE SKIP LOCKED
             """)
+            .param("now", nowTs)
             .param("limit", limit)
             .query(rowMapper)
             .list();
@@ -281,11 +353,29 @@ public class WebhookEventRepository {
     public void markProcessed(Long id, Instant processedAt) {
         jdbcClient.sql("""
             UPDATE webhook_events
-            SET status = 'PROCESSED', processed_at = :processedAt, attempts = attempts + 1, last_error = NULL
+            SET status = 'PROCESSED', processed_at = :processedAt, attempts = attempts + 1,
+                last_error = NULL, next_attempt_at = NULL
             WHERE id = :id
             """)
             .param("id", id)
             .param("processedAt", Timestamp.from(processedAt))
+            .update();
+    }
+
+    /**
+     * Re-queues an arrival-race webhook cleanly without incrementing attempts or marking failed.
+     */
+    public void requeueForArrivalRace(Long id, Instant nextAttemptAt, String note) {
+        jdbcClient.sql("""
+            UPDATE webhook_events
+            SET status = 'PENDING',
+                next_attempt_at = :nextAttemptAt,
+                last_error = :note
+            WHERE id = :id
+            """)
+            .param("id", id)
+            .param("nextAttemptAt", Timestamp.from(nextAttemptAt))
+            .param("note", note)
             .update();
     }
 
@@ -297,7 +387,8 @@ public class WebhookEventRepository {
         String newStatus = willRetry ? "PENDING" : "FAILED";
         jdbcClient.sql("""
             UPDATE webhook_events
-            SET status = :status, attempts = attempts + 1, last_error = :errorMessage, processed_at = :attemptedAt
+            SET status = :status, attempts = attempts + 1, last_error = :errorMessage,
+                processed_at = :attemptedAt, next_attempt_at = NULL
             WHERE id = :id
             """)
             .param("id", id)
@@ -343,6 +434,7 @@ public class WebhookEventRepository {
             Timestamp processedAt = rs.getTimestamp("processed_at");
             Timestamp lastReceivedAt = rs.getTimestamp("last_received_at");
             Timestamp eventCreatedAt = rs.getTimestamp("event_created_at");
+            Timestamp nextAttemptAt = rs.getTimestamp("next_attempt_at");
             return new WebhookEvent(
                 rs.getLong("id"),
                 rs.getString("paypal_event_id"),
@@ -360,7 +452,9 @@ public class WebhookEventRepository {
                 lastReceivedAt != null ? lastReceivedAt.toInstant() : null,
                 eventCreatedAt != null ? eventCreatedAt.toInstant() : null,
                 rs.getString("custom_id"),
-                rs.getString("paypal_order_id")
+                rs.getString("paypal_order_id"),
+                nextAttemptAt != null ? nextAttemptAt.toInstant() : null,
+                rs.getBoolean("payload_mismatch")
             );
         }
     }

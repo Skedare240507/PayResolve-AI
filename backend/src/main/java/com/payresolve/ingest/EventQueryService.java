@@ -42,4 +42,8 @@ public class EventQueryService implements LastWebhookTimeProvider {
             .map(OrderWebhookTraceDto::from)
             .toList();
     }
+
+    public long countVerifiedDuplicateDeliveriesBlocked() {
+        return repository.countVerifiedDuplicateDeliveriesBlocked();
+    }
 }
