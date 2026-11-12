@@ -45,6 +45,9 @@ class RateLimitAndLockoutIntegrationTest {
     @Autowired
     private CaseService caseService;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @MockitoBean
     private PayPalWebhookVerificationClient verificationClient;
 
@@ -53,6 +56,7 @@ class RateLimitAndLockoutIntegrationTest {
         rateLimitService.resetAll();
         loginAttemptService.resetAll();
         caseService.seedDemoCases();
+        jdbcTemplate.update("DELETE FROM case_attachments");
     }
 
     @Test
@@ -171,8 +175,9 @@ class RateLimitAndLockoutIntegrationTest {
             .andExpect(header().exists("Retry-After"));
 
         byte[] tinyPng = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        java.util.List<String> targetCases = java.util.List.of("PR-0142", "PR-0141", "PR-0140", "PR-0138", "PR-0137");
         for (int i = 0; i < 10; i++) {
-            String targetCase = i < 5 ? "PR-0142" : "PR-0141";
+            String targetCase = targetCases.get(i % targetCases.size());
             MockMultipartFile file = new MockMultipartFile("file", "proof" + i + ".png", "image/png", tinyPng);
             mockMvc.perform(multipart("/api/cases/" + targetCase + "/attachments")
                     .file(file)

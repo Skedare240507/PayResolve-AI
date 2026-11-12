@@ -83,10 +83,12 @@ Open `.env` and fill it in. The table below lists the variables that matter.
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | From your Sandbox REST app in the PayPal developer dashboard. |
 | `PAYPAL_WEBHOOK_ID` | The id PayPal gives you after you add a webhook (step 6). |
 | `PAYPAL_BASE_URL` | `https://api-m.sandbox.paypal.com` |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Used for questions that include an image or PDF. |
-| `GROQ_API_KEY`, `GROQ_MODEL` | Used for text-only questions. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Used for questions that include an image or PDF. Default: `gemini-3.5-flash`. |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Used for text-only questions. Default: `openai/gpt-oss-120b`. |
 | `OPERATOR_USERNAME`, `OPERATOR_PASSWORD` | The built-in account that can approve actions. Choose your own password. |
 | `VIEWER_USERNAME`, `VIEWER_PASSWORD` | The built-in read-only account. |
+| `DEMO_BUYER_EMAIL`, `DEMO_BUYER_PASSWORD` | Optional. Displayed on the Demo Shop for frictionless test checkouts. |
+| `DEMO_RESET_LINKS` | `true` displays password reset links on-screen for demo purposes without email service. |
 | `APP_PUBLIC_URL` | Where PayPal can reach the backend. Use `http://localhost:8080` until you set up a tunnel. |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` for local work. |
 | `DEMO_MODE` | `true` turns on the fault switches. |
@@ -208,6 +210,25 @@ PayResolve AI exports an OpenAPI `3.0.1` specification directly from Spring Boot
 The investigator calls tools that only read: the PayPal order and capture, webhook events for an order, the shop order, shipment details and the case's evidence. None of them can change data or move money.
 
 Text questions go to Groq. Questions that include an image or PDF go to Gemini. If a provider fails, the request falls back to the other one, and if both fail the app returns the rule-based findings marked as degraded. We only send synthetic Sandbox data to these services. Which provider answered is shown in the AI panel.
+
+## Security & Hardening
+
+PayResolve AI enforces a defense-in-depth security posture designed for production readiness:
+
+- **Role-Based Access Control (RBAC):**
+  - **Public:** PayPal webhook ingestion (`POST /api/webhooks/paypal`), authentication (`/api/auth/**`), CSRF token endpoint (`GET /api/auth/csrf`), health checks (`/actuator/health`), products catalog, and token-gated buyer checkout completion (`/api/shop/orders/{id}/paypal/capture`, `/api/shop/orders/{id}/status`).
+  - **Signed-in (`VIEWER` or `OPERATOR`):** Read-only access to all case queues, evidence graphs, audit ledgers, event inboxes, benchmark metrics, plus rate-limited AI investigations (`POST /api/cases/{id}/investigate`) and chat (`POST /api/agent/chat`).
+  - **OPERATOR Only:** Action approvals and rejections (`/api/actions/**`), manual case detection, case status transitions, evidence attachment uploads, benchmark runs, PayPal diagnostics, demo fault switches, and admin shop order creation.
+- **CSRF Protection:** Double-submit cookie pattern via `CookieCsrfTokenRepository` for all non-webhook mutating requests. The frontend retrieves `X-XSRF-TOKEN` via `/api/auth/csrf`, attaches it to mutating HTTP headers, and automatically retries upon token rotation.
+- **Security Headers & CSP:** Strict headers enforced via Spring Security and Render CDN:
+  - `Content-Security-Policy`: scoped strictly to Google Fonts, AG Charts/Studio styling, and PayPal/Groq/Gemini APIs.
+  - `X-Content-Type-Options: nosniff`
+  - `frame-ancestors: 'none'` (anti-clickjacking)
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- **Attachment Controls:** Uploaded evidence files are validated strictly by magic bytes (PNG, JPEG, PDF; client Content-Type fallback is rejected). Stored filenames are randomized using UUIDs to prevent directory traversal. Uploads are capped at 5 per case (returning HTTP 422 if exceeded) and strictly restricted to `OPERATOR` accounts.
+- **Rate Limiting & Account Lockout:** Sliding-window per-IP and per-user limits across authentication, password reset, and AI investigations. Five consecutive failed login attempts trigger a 15-minute account lockout while preserving constant-time verification.
+- **Data & Log Sanitization:** Custom pattern masking (`SensitiveDataMasker.java`) redacts Bearer tokens, PayPal client secrets, Groq/Gemini API keys, passwords, and sensitive query tokens across all log streams. Frontend audit logs and event payloads sanitize authentication headers prior to rendering.
 
 ## Repository layout
 

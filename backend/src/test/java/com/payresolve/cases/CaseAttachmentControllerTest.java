@@ -31,9 +31,13 @@ class CaseAttachmentControllerTest {
     @Autowired
     private CaseAttachmentRepository attachmentRepository;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void setUp() {
         caseService.seedDemoCases();
+        jdbcTemplate.update("DELETE FROM case_attachments");
     }
 
     @Test

@@ -51,12 +51,11 @@ design/
 
 # Scratch & temporary artifacts
 /scratch/
-docs/report/
+docs/report/screens/
+docs/report/motion/
 docs/submission/
 docs/PROJECT_REPORT.md
 docs/sponsors.md
-memory.md 
-
-docs/DEPLOYMENT.md
+memory.md
 docs/astropods-plan.md
 metrics.md
