@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -29,6 +29,20 @@ import ServerErrorPage from './pages/ServerErrorPage';
 import RedirectingPage from './pages/RedirectingPage';
 
 
+function IndexHtmlRoute() {
+  const [searchParams] = useSearchParams();
+  const orderId = searchParams.get('orderId');
+  const isCancel = searchParams.get('cancel') === 'true' || searchParams.has('cancel');
+
+  if (orderId && isCancel) {
+    return <Navigate to={`/shop/cancel?${searchParams.toString()}`} replace />;
+  }
+  if (orderId) {
+    return <Navigate to={`/shop/return?${searchParams.toString()}`} replace />;
+  }
+  return <Navigate to="/" replace />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -52,6 +66,7 @@ export default function App() {
           {/* Public buyer PayPal return routes (token-gated, independent of admin session) */}
           <Route path="/shop/return" element={<ShopReturnPage />} />
           <Route path="/shop/cancel" element={<ShopCancelPage />} />
+          <Route path="/index.html" element={<IndexHtmlRoute />} />
 
           {/* Protected dashboard routes */}
           <Route path="/queue" element={<ProtectedRoute><ExceptionQueuePage /></ProtectedRoute>} />

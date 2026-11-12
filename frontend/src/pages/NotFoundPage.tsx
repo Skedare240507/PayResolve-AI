@@ -1,11 +1,26 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PayResolveLogo } from '../components/PayResolveLogo';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const missingPath = `${location.pathname}${location.search || ''}`;
+
+  useEffect(() => {
+    const orderId = searchParams.get('orderId');
+    const token = searchParams.get('token');
+    const payerId = searchParams.get('PayerID');
+    const isCancel = searchParams.get('cancel') === 'true' || searchParams.has('cancel');
+
+    if (orderId && isCancel) {
+      navigate(`/shop/cancel${location.search}`, { replace: true });
+    } else if (orderId && (token || payerId)) {
+      navigate(`/shop/return${location.search}`, { replace: true });
+    }
+  }, [searchParams, location.search, navigate]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#080c14] text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative">

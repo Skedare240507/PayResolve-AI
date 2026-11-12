@@ -50,7 +50,7 @@ function BuyerReturnShell({
 export default function ShopReturnPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId') || '';
-  const token = searchParams.get('token') || '';
+  const token = searchParams.get('token') || searchParams.get('paypalOrderId') || '';
   const { user } = useAuth();
 
   return (

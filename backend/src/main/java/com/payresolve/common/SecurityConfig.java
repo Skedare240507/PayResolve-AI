@@ -89,7 +89,10 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfRepository)
                 .csrfTokenRequestHandler(csrfRequestHandler)
-                .ignoringRequestMatchers("/api/webhooks/**")
+                .ignoringRequestMatchers(
+                    "/api/webhooks/**",
+                    "/api/shop/orders/*/capture"
+                )
             )
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
