@@ -193,18 +193,17 @@ public class EvidenceService {
             ));
         }
 
-        // 6. Webhook Events Evidence
-        List<WebhookEvent> events = webhookEventRepository.findAll(100, 0).stream()
-            .filter(e -> {
-                if (caseRecord.shopOrderId() != null && e.rawBody() != null && e.rawBody().contains(caseRecord.shopOrderId())) {
-                    return true;
-                }
-                if (caseRecord.paypalOrderId() != null && e.rawBody() != null && e.rawBody().contains(caseRecord.paypalOrderId())) {
-                    return true;
-                }
-                return false;
-            })
-            .toList();
+        // 6. Webhook Events Evidence (matched strictly via indexed columns, never raw_body LIKE/contains)
+        String captureRef = payments.stream()
+            .map(PaymentRecord::paypalCaptureId)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(shopOrderOpt.map(ShopOrder::paypalCaptureId).orElse(null));
+        List<WebhookEvent> events = webhookEventRepository.findByOrderRefs(
+            caseRecord.shopOrderId(),
+            caseRecord.paypalOrderId(),
+            captureRef
+        );
 
         if (!events.isEmpty()) {
             for (WebhookEvent event : events) {

@@ -22,8 +22,17 @@ public record CaseDto(
     @JsonProperty("status") String status,
     @JsonProperty("openedAt") Instant openedAt,
     @JsonProperty("resolvedAt") Instant resolvedAt,
-    @JsonProperty("summary") String summary
+    @JsonProperty("summary") String summary,
+    @JsonProperty("synthetic") boolean synthetic
 ) {
+    public CaseDto(
+        String id, String type, String typeLabel, String order, String amount,
+        Long amountMinor, String currency, String severity, String age,
+        String status, Instant openedAt, Instant resolvedAt, String summary
+    ) {
+        this(id, type, typeLabel, order, amount, amountMinor, currency, severity, age, status, openedAt, resolvedAt, summary, false);
+    }
+
     public static CaseDto fromRecord(CaseRecord record, Instant now) {
         String orderLabel = record.shopOrderId() != null
             ? (record.shopOrderId().startsWith("ORD-") ? "#" + record.shopOrderId().substring(4) : record.shopOrderId())
@@ -50,7 +59,8 @@ public record CaseDto(
             record.status().displayName(),
             record.openedAt(),
             record.resolvedAt(),
-            record.summary()
+            record.summary(),
+            record.synthetic()
         );
     }
 

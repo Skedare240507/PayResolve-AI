@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -452,6 +453,36 @@ public class ShopOrderService {
                 rs.getTimestamp("captured_at") != null ? rs.getTimestamp("captured_at").toInstant() : null
             ))
             .optional();
+    }
+
+    public List<PaymentRecord> findPaymentsByOrderId(String shopOrderId) {
+        Objects.requireNonNull(shopOrderId, "shopOrderId must not be null");
+        return jdbcClient.sql("""
+            SELECT id, shop_order_id, paypal_capture_id, amount_minor, currency, status, captured_at
+            FROM payments
+            WHERE shop_order_id = :shopOrderId
+            ORDER BY captured_at DESC
+            """)
+            .param("shopOrderId", shopOrderId)
+            .query((rs, rowNum) -> new PaymentRecord(
+                rs.getString("id"),
+                rs.getString("shop_order_id"),
+                rs.getString("paypal_capture_id"),
+                rs.getLong("amount_minor"),
+                rs.getString("currency"),
+                rs.getString("status"),
+                rs.getTimestamp("captured_at") != null ? rs.getTimestamp("captured_at").toInstant() : null
+            ))
+            .list();
+    }
+
+    public Set<String> findAllCaptureIds() {
+        return Set.copyOf(jdbcClient.sql("""
+            SELECT paypal_capture_id FROM payments
+            WHERE paypal_capture_id IS NOT NULL
+            """)
+            .query(String.class)
+            .list());
     }
 
     /**

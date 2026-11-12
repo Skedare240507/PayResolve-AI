@@ -14,12 +14,14 @@ export type ForgotPasswordResponse = components['schemas']['ForgotPasswordRespon
 export type ResetPasswordRequest = components['schemas']['ResetPasswordRequest'];
 
 // Case types
-export type CaseRecord = components['schemas']['CaseDto'];
-export type CaseDto = components['schemas']['CaseDto'];
+export type CaseRecord = components['schemas']['CaseDto'] & { synthetic?: boolean };
+export type CaseDto = components['schemas']['CaseDto'] & { synthetic?: boolean };
 export type CaseDetailsDto = components['schemas']['CaseDetailsDto'];
 export type CaseStatusUpdateRequest = components['schemas']['CaseStatusUpdateRequest'];
-export type PagedResponseCaseRecord = components['schemas']['PagedResponseCaseDto'];
-export type PagedResponseCaseDto = components['schemas']['PagedResponseCaseDto'];
+export type PagedResponseCaseRecord = Omit<components['schemas']['PagedResponseCaseDto'], 'content'> & {
+  content?: CaseRecord[];
+};
+export type PagedResponseCaseDto = PagedResponseCaseRecord;
 export type DetectionRunResultDto = components['schemas']['DetectionRunResultDto'];
 
 export interface CaseQueueStats {
@@ -384,6 +386,7 @@ export const api = {
       severity?: string;
       type?: string;
       search?: string;
+      includeResolved?: boolean;
       page?: number;
       size?: number;
     }) => {
@@ -392,6 +395,7 @@ export const api = {
       if (params?.severity) query.set('severity', params.severity);
       if (params?.type) query.set('type', params.type);
       if (params?.search) query.set('search', params.search);
+      if (params?.includeResolved != null) query.set('includeResolved', String(params.includeResolved));
       if (params?.page != null) query.set('page', String(params.page));
       if (params?.size != null) query.set('size', String(params.size));
       const qs = query.toString();

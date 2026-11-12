@@ -146,9 +146,8 @@ public class CaseService {
         long dismissed = caseRepository.countAll("DISMISSED", null, null, null);
         long total = open + investigating + actionProposed + resolved + dismissed;
 
-        long redundantDeliveries = eventQueryService.countVerifiedDuplicateDeliveriesBlocked();
-        long resolvedDupCases = caseRepository.countResolvedDuplicateCases();
-        long duplicatesBlocked = Math.max(redundantDeliveries, resolvedDupCases);
+        long duplicatesBlocked = eventQueryService.countVerifiedDuplicateDeliveriesBlocked();
+        long activeCount = open + investigating + actionProposed;
 
         long oldestOpenMinutes = caseRepository.findOldestOpenCaseOpenedAt()
             .map(openedAt -> Math.max(0L, Duration.between(openedAt, clock.instant()).toMinutes()))
@@ -161,7 +160,7 @@ public class CaseService {
             actionProposed,
             resolved,
             dismissed,
-            open,
+            activeCount,
             actionProposed,
             duplicatesBlocked,
             oldestOpenMinutes
@@ -185,9 +184,13 @@ public class CaseService {
     }
 
     public PagedResponse<CaseDto> getCases(String status, String severity, String type, String search, int page, int size) {
+        return getCases(status, severity, type, search, true, page, size);
+    }
+
+    public PagedResponse<CaseDto> getCases(String status, String severity, String type, String search, boolean includeResolved, int page, int size) {
         int offset = page * size;
-        List<CaseRecord> records = caseRepository.findAll(status, severity, type, search, size, offset);
-        long total = caseRepository.countAll(status, severity, type, search);
+        List<CaseRecord> records = caseRepository.findAll(status, severity, type, search, includeResolved, size, offset);
+        long total = caseRepository.countAll(status, severity, type, search, includeResolved);
 
         Instant now = clock.instant();
         List<CaseDto> dtos = records.stream()
@@ -237,7 +240,8 @@ public class CaseService {
                 now.minusSeconds(120), // 2 min ago
                 now.minusSeconds(120),
                 null,
-                "Payment captured on PayPal ($84.50) but shop order ORD-10482 remains AWAITING_CONFIRMATION. Webhook handler dropped or failed."
+                "Payment captured on PayPal ($84.50) but shop order ORD-10482 remains AWAITING_CONFIRMATION. Webhook handler dropped or failed.",
+                true
             ),
             new CaseRecord(
                 "PR-0141",
@@ -251,7 +255,8 @@ public class CaseService {
                 now.minusSeconds(900), // 15 min ago
                 now.minusSeconds(900),
                 null,
-                "PayPal capture CAP-10481 ($24.00) completed. Shop order ORD-10481 not transitioned to PAID."
+                "PayPal capture CAP-10481 ($24.00) completed. Shop order ORD-10481 not transitioned to PAID.",
+                true
             ),
             new CaseRecord(
                 "PR-0140",
@@ -265,7 +270,8 @@ public class CaseService {
                 now.minusSeconds(1800), // 30 min ago
                 now.minusSeconds(1800),
                 null,
-                "Duplicate delivery detected for webhook event WH-EVT-10477 (delivered 2 times). Business effect executed once idempotently."
+                "Duplicate delivery detected for webhook event WH-EVT-10477 (delivered 2 times). Business effect executed once idempotently.",
+                true
             ),
             new CaseRecord(
                 "PR-0138",
@@ -279,7 +285,8 @@ public class CaseService {
                 now.minusSeconds(3600), // 1 h ago
                 now.minusSeconds(3600),
                 null,
-                "PayPal refund REF-10470 ($38.50) has no matching shop refund record."
+                "PayPal refund REF-10470 ($38.50) has no matching shop refund record.",
+                true
             ),
             new CaseRecord(
                 "PR-0137",
@@ -293,7 +300,8 @@ public class CaseService {
                 now.minusSeconds(14400), // 4 h ago
                 now.minusSeconds(14400),
                 null,
-                "Orphan capture: PayPal capture CAP-ORPHAN-0137 ($120.00) has no matching merchant shop order."
+                "Orphan capture: PayPal capture CAP-ORPHAN-0137 ($120.00) has no matching merchant shop order.",
+                true
             ),
             new CaseRecord(
                 "PR-0135",
@@ -307,7 +315,8 @@ public class CaseService {
                 now.minusSeconds(7200), // 2 h ago
                 now.minusSeconds(7200),
                 now.minusSeconds(3600),
-                "PayPal capture reconciled and shop order ORD-10466 synced to PAID."
+                "PayPal capture reconciled and shop order ORD-10466 synced to PAID.",
+                true
             )
         );
 

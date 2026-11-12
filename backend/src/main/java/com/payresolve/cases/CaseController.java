@@ -42,10 +42,11 @@ public class CaseController {
         @RequestParam(required = false) String severity,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) String search,
+        @RequestParam(defaultValue = "false") boolean includeResolved,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
-        PagedResponse<CaseDto> result = caseService.getCases(status, severity, type, search, page, size);
+        PagedResponse<CaseDto> result = caseService.getCases(status, severity, type, search, includeResolved, page, size);
         return ResponseEntity.ok(result);
     }
 

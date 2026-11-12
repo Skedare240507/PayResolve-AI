@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS cases (
     opened_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP WITH TIME ZONE,
-    summary TEXT
+    summary TEXT,
+    synthetic BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cases_type_paypal_order ON cases(type, paypal_order_id);

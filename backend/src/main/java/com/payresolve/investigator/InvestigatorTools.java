@@ -185,9 +185,7 @@ public class InvestigatorTools {
                 "{\"error\": \"STEP_CAP_REACHED\"}", 1);
         }
 
-        List<WebhookEvent> matchingEvents = webhookEventRepository.findAll(100, 0).stream()
-            .filter(e -> e.rawBody() != null && e.rawBody().contains(orderId))
-            .toList();
+        List<WebhookEvent> matchingEvents = webhookEventRepository.findByOrderRefs(orderId, orderId, orderId);
 
         List<Map<String, Object>> summaries = matchingEvents.stream()
             .map(e -> Map.<String, Object>of(

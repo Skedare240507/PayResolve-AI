@@ -54,6 +54,9 @@ class WebhookIngestIntegrationTest {
     @Autowired
     private com.payresolve.common.RateLimitService rateLimitService;
 
+    @Autowired
+    private com.payresolve.cases.CaseDetectionService caseDetectionService;
+
     @MockitoBean
     private PayPalWebhookVerificationClient verificationClient;
 
@@ -406,8 +409,8 @@ class WebhookIngestIntegrationTest {
     }
 
     @Test
-    @DisplayName("10. Two verified deliveries create one LOW/RESOLVED informational case, one payment effect, and count toward duplicates blocked")
-    void twoVerifiedDeliveriesCreateResolvedInformationalCase() throws Exception {
+    @DisplayName("10. Two verified deliveries create ZERO cases, delivery_count=2, one payment effect, and count toward duplicates blocked")
+    void twoVerifiedDeliveriesCreateZeroCasesAndIncrementDuplicatesBlocked() throws Exception {
         when(verificationClient.verifySignature(any(), any())).thenReturn(true);
 
         shopOrderService.createOrder("ORDER-DUP-INFO", "PP-ORD-DUP-INFO", Money.parse("40.00", "USD"), "Dup Buyer");
@@ -423,20 +426,23 @@ class WebhookIngestIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.duplicate").value(true));
 
+        WebhookEvent stored = repository.findByPaypalEventId("WH-DUP-INFO").orElseThrow();
+        assertThat(stored.deliveryCount()).isEqualTo(2);
+
         // Exactly 1 payment record
         Integer paymentCount = jdbcClient.sql("SELECT COUNT(*) FROM payments WHERE paypal_capture_id = 'CAP-DUP-INFO'")
                 .query(Integer.class).single();
         assertThat(paymentCount).isEqualTo(1);
 
-        // One LOW/RESOLVED informational DUPLICATE_EVENT case created
-        var row = jdbcClient.sql("SELECT status, severity, summary FROM cases WHERE type = 'DUPLICATE_EVENT'")
-                .query((rs, n) -> java.util.List.of(rs.getString("status"), rs.getString("severity"), rs.getString("summary")))
-                .single();
-        assertThat(row.get(0)).isEqualTo("RESOLVED");
-        assertThat(row.get(1)).isEqualTo("LOW");
-        assertThat(row.get(2)).isEqualTo("Duplicate delivery absorbed by idempotency; business effect ran once");
+        // ZERO cases created (absorbed duplicate)
+        Integer caseCount = jdbcClient.sql("SELECT COUNT(*) FROM cases").query(Integer.class).single();
+        assertThat(caseCount).isEqualTo(0);
 
-        // Counts toward duplicatesBlockedToday and NOT openCount
+        // Unverified duplicate delivery must NOT count toward duplicatesBlockedToday
+        repository.insert("WH-UNVERIFIED-DUP", "PAYMENT.CAPTURE.COMPLETED", "CAP-X", "{}", null, false, "UNVERIFIED");
+        jdbcClient.sql("UPDATE webhook_events SET delivery_count = 4 WHERE paypal_event_id = 'WH-UNVERIFIED-DUP'").update();
+
+        // Counts toward duplicatesBlockedToday = SUM(delivery_count - 1) over verified events = (2 - 1) = 1
         mockMvc.perform(get("/api/cases/stats").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openCount").value(0))
@@ -507,5 +513,74 @@ class WebhookIngestIntegrationTest {
         ShopOrder order = shopOrderService.findOrderById("ORDER-RACE-1").orElseThrow();
         assertThat(order.status()).isEqualTo("PAID");
         assertThat(repository.findByPaypalEventId("WH-RACE-1").orElseThrow().attempts()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("13. Normal payment with 1 handler retry creates zero cases")
+    void normalPaymentWithHandlerRetryCreatesZeroCases() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+        shopOrderService.createOrder("ORD-RETRY-1", "PP-RETRY-1", Money.parse("62.50", "USD"), "Retry Buyer");
+
+        // Simulate 1 handler retry (attempts = 2, delivery_count = 1)
+        String payload = sampleCaptureCompletedPayload("WH-RETRY-1", "CAP-RETRY-1", "ORD-RETRY-1", "62.50");
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isOk());
+        jdbcClient.sql("UPDATE webhook_events SET attempts = 1 WHERE paypal_event_id = 'WH-RETRY-1'").update();
+
+        assertThat(workerService.processBatch(10)).isEqualTo(1);
+        WebhookEvent processed = repository.findByPaypalEventId("WH-RETRY-1").orElseThrow();
+        assertThat(processed.attempts()).isEqualTo(2);
+        assertThat(processed.deliveryCount()).isEqualTo(1);
+
+        caseDetectionService.detectForEvent(processed);
+        Integer caseCount = jdbcClient.sql("SELECT COUNT(*) FROM cases").query(Integer.class).single();
+        assertThat(caseCount).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("14. Two orders with the same amount never get each other's events")
+    void twoOrdersWithSameAmountNeverCrossMatchEvents() throws Exception {
+        when(verificationClient.verifySignature(any(), any())).thenReturn(true);
+        shopOrderService.createOrder("ORD-SAME-A", "PP-SAME-A", Money.parse("62.50", "USD"), "Buyer A");
+        shopOrderService.createOrder("ORD-SAME-B", "PP-SAME-B", Money.parse("62.50", "USD"), "Buyer B");
+
+        // Pay only ORD-SAME-A
+        String payloadA = sampleCaptureCompletedPayload("WH-SAME-A", "CAP-SAME-A", "ORD-SAME-A", "62.50");
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payloadA))
+                .andExpect(status().isOk());
+        assertThat(workerService.processBatch(10)).isEqualTo(1);
+
+        // Even if ORD-SAME-A's event were delivered twice, ORD-SAME-B must never receive any case or evidence for WH-SAME-A
+        mockMvc.perform(post("/api/webhooks/paypal").contentType(MediaType.APPLICATION_JSON).content(payloadA))
+                .andExpect(status().isOk());
+
+        caseDetectionService.runDetection();
+        Integer casesForB = jdbcClient.sql("SELECT COUNT(*) FROM cases WHERE shop_order_id = 'ORD-SAME-B'")
+                .query(Integer.class).single();
+        assertThat(casesForB).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("15. Two payment rows for one capture id create exactly one OPEN HIGH DUPLICATE_EVENT case")
+    void twoPaymentRowsForOneCaptureCreateOneOpenHighCase() {
+        shopOrderService.createOrder("ORD-2PAY", "PP-2PAY", Money.parse("62.50", "USD"), "Double Pay Buyer");
+        jdbcClient.sql("UPDATE shop_orders SET status = 'PAID' WHERE id = 'ORD-2PAY'").update();
+        jdbcClient.sql("INSERT INTO payments (id, shop_order_id, paypal_capture_id, amount_minor, currency, status) VALUES ('PAY-A', 'ORD-2PAY', 'CAP-2PAY', 6250, 'USD', 'COMPLETED')").update();
+        jdbcClient.sql("INSERT INTO payments (id, shop_order_id, paypal_capture_id, amount_minor, currency, status) VALUES ('PAY-B', 'ORD-2PAY', 'CAP-2PAY', 6250, 'USD', 'COMPLETED')").update();
+
+        caseDetectionService.runDetection();
+
+        var row = jdbcClient.sql("SELECT type, status, severity FROM cases WHERE shop_order_id = 'ORD-2PAY'")
+                .query((rs, n) -> java.util.List.of(rs.getString("type"), rs.getString("status"), rs.getString("severity")))
+                .single();
+        assertThat(row.get(0)).isEqualTo("DUPLICATE_EVENT");
+        assertThat(row.get(1)).isEqualTo("OPEN");
+        assertThat(row.get(2)).isEqualTo("HIGH");
+
+        // Re-running detection is idempotent (still 1 case)
+        caseDetectionService.runDetection();
+        Integer count = jdbcClient.sql("SELECT COUNT(*) FROM cases WHERE shop_order_id = 'ORD-2PAY'")
+                .query(Integer.class).single();
+        assertThat(count).isEqualTo(1);
     }
 }

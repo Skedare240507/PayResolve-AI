@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type {
@@ -76,13 +76,39 @@ function formatMinor(minor?: number): string {
   return `$${(minor / 100).toFixed(2)}`;
 }
 
+function formatDurationMinutes(totalMinutes?: number): string {
+  const mins = Math.max(0, Math.round(totalMinutes ?? 0));
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) return remMins > 0 ? `${hours} h ${remMins} min` : `${hours} h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days} d ${remHours} h` : `${days} d`;
+}
+
 export default function ExceptionQueuePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showResolved = searchParams.get('showResolved') === 'true';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
+
+  const toggleShowResolved = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    if (showResolved) {
+      next.delete('showResolved');
+      if (selectedStatus === 'Resolved') {
+        setSelectedStatus('All');
+      }
+    } else {
+      next.set('showResolved', 'true');
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, showResolved, selectedStatus]);
 
   // 1. Fetch Cases (auto-refresh every 5s when tab is visible)
   const {
@@ -93,10 +119,11 @@ export default function ExceptionQueuePage() {
     dataUpdatedAt: casesUpdatedAt,
     isFetching: casesFetching,
   } = useQuery({
-    queryKey: ['cases', selectedStatus],
+    queryKey: ['cases', selectedStatus, showResolved],
     queryFn: () =>
       api.cases.list({
         status: selectedStatus !== 'All' ? selectedStatus.toUpperCase() : undefined,
+        includeResolved: showResolved,
         size: 50,
       }),
     refetchInterval: 5000,
@@ -144,19 +171,10 @@ export default function ExceptionQueuePage() {
   const [gridApi, setGridApi] = useState<GridApi<GridCaseRow> | null>(null);
   const { gridTheme } = useGridTheme();
 
-  // Show "Sample data" button only when data in queue is synthetic/demo fixtures or queue is empty
+  // Show "Sample data" button only when data in queue is flagged synthetic
   const hasSyntheticCases = useMemo(() => {
     const rawList = pagedData?.content || [];
-    if (rawList.length === 0) return true;
-    return rawList.some((c) =>
-      (c as unknown as Record<string, unknown>).synthetic === true ||
-      (c as unknown as Record<string, unknown>).source === 'SYNTHETIC' ||
-      c.summary?.toLowerCase().includes('synthetic') ||
-      c.summary?.toLowerCase().includes('fixture') ||
-      c.summary?.toLowerCase().includes('sample') ||
-      c.order?.startsWith('#104') ||
-      c.id?.startsWith('PR-01')
-    );
+    return rawList.some((c) => c.synthetic === true);
   }, [pagedData]);
 
   // Map API records to grid rows (real rows only, no mock fallback)
@@ -205,8 +223,8 @@ export default function ExceptionQueuePage() {
       headerName: 'Case',
       pinned: 'left',
       lockPinned: true,
-      width: 125,
-      minWidth: 115,
+      width: 155,
+      minWidth: 140,
       filter: 'agTextColumnFilter',
       tooltipValueGetter: (params) => `Case ${params.value ?? ''} — Press Enter to inspect`,
       cellRenderer: (params: ICellRendererParams<GridCaseRow>) => {
@@ -220,6 +238,14 @@ export default function ExceptionQueuePage() {
             >
               {params.value}
             </Link>
+            {params.data?.raw?.synthetic && (
+              <span
+                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0"
+                title="Seeded demo fixture case"
+              >
+                Seed
+              </span>
+            )}
             <CopyableIdCell value={String(params.value)} displayText="" />
           </div>
         );
@@ -429,14 +455,11 @@ export default function ExceptionQueuePage() {
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               </div>
-              <div className="flex items-baseline justify-between">
-                <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
-                  <CountUp
-                    value={statsData?.oldestOpenMinutes ?? 0}
-                    suffix=" min"
-                  />
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                  {formatDurationMinutes(statsData?.oldestOpenMinutes)}
                 </div>
-                <span className="text-xs text-slate-400">SLA: 60m</span>
+                <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">SLA: 60m</span>
               </div>
             </div>
           </div>
@@ -495,6 +518,20 @@ export default function ExceptionQueuePage() {
                   >
                     <span>Status</span>
                     <GoogleIcon name="expand_more" size={14} className="text-slate-400" />
+                  </button>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showResolved}
+                    onClick={toggleShowResolved}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-normal cursor-pointer transition-colors shrink-0 ${
+                      showResolved
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-[#131b26]'
+                    }`}
+                  >
+                    <GoogleIcon name={showResolved ? 'visibility' : 'visibility_off'} size={14} />
+                    <span>Show resolved</span>
                   </button>
                 </div>
               </div>

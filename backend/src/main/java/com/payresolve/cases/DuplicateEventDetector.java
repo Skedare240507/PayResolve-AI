@@ -10,13 +10,12 @@ import java.util.*;
 
 /**
  * Detector for DUPLICATE_EVENT (P0):
- * - Processing retries (attempts > 1) are NOT duplicate deliveries and create no case.
- * - Verified duplicate deliveries (delivery_count > 1) with a single business effect and identical
- *   payloads emit a LOW severity, immediately RESOLVED informational case so idempotent deduplication
- *   is auditable without inflating open cases.
- * - Remains OPEN (HIGH severity) only when the business effect ran more than once (duplicate payment
- *   records for the same capture id), two deliveries of the same event id carry different payloads,
- *   or distinct event ids execute multiple capture/refund notifications for the same resource.
+ * - Processing retries (attempts > 1) and absorbed duplicate deliveries (delivery_count > 1 with
+ *   identical payloads and a single business effect) create NO case.
+ * - Creates an OPEN, HIGH severity DUPLICATE_EVENT case ONLY when:
+ *   1. The business effect ran more than once (duplicate payment records for the same capture id), OR
+ *   2. Two deliveries of the same event id carried conflicting payloads (payload_mismatch = true), OR
+ *   3. Distinct event ids execute multiple capture/refund notifications for the same resource.
  */
 @Component
 public class DuplicateEventDetector implements Detector {
@@ -92,21 +91,8 @@ public class DuplicateEventDetector implements Detector {
                 return findings;
             }
 
-            // Check 3 (LOW, RESOLVED): Verified duplicate delivery absorbed idempotently (business effect ran once)
-            if (event.verified() && event.deliveryCount() > 1) {
-                boolean businessEffectOnlyOnce = snapshot.shopPayments().size() <= 1;
-                if (businessEffectOnlyOnce) {
-                    findings.add(DetectionFinding.resolved(
-                        CaseType.DUPLICATE_EVENT,
-                        CaseSeverity.LOW,
-                        paypalOrderId != null ? paypalOrderId : event.paypalEventId(),
-                        shopOrderId,
-                        orderAmount,
-                        INFORMATIONAL_SUMMARY
-                    ));
-                    return findings;
-                }
-            }
+            // Absorbed duplicate deliveries (delivery_count > 1 with identical payload and single effect)
+            // create NO case; they are tracked on the Events page and counted in "Duplicates blocked".
 
             // Check 4 (HIGH, OPEN): Repeated verified event IDs present as separate rows
             if (event.paypalEventId() != null && !seenEventIds.add(event.paypalEventId())) {

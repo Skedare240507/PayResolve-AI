@@ -74,14 +74,14 @@ class DuplicateEventDetectorTest {
                     .build(),
                 0, null, null, null),
 
-            // POSITIVE (LOW, RESOLVED): delivery_count > 1 where business effect ran once
-            Arguments.of("Positive informational: Verified delivery twice with single payment effect",
+            // NEGATIVE: delivery_count > 1 where business effect ran once (absorbed duplicate) creates ZERO cases
+            Arguments.of("Negative: Verified delivery twice with single payment effect (absorbed)",
                 DetectionSnapshot.builder()
                     .shopOrder(order)
                     .addWebhookEvent(deliveredTwiceEvent)
                     .addShopPayment(singlePayment)
                     .build(),
-                1, CaseType.DUPLICATE_EVENT, CaseSeverity.LOW, CaseStatus.RESOLVED),
+                0, null, null, null),
 
             // POSITIVE (HIGH, OPEN): Repeated payment records for same capture
             Arguments.of("Positive high: Duplicate payment records for same capture",

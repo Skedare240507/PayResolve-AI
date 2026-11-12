@@ -45,7 +45,7 @@ public class CaseRepository {
     public Optional<CaseRecord> findById(String id) {
         String sql = """
             SELECT id, type, status, severity, paypal_order_id, shop_order_id,
-                   amount_minor, currency, opened_at, updated_at, resolved_at, summary
+                   amount_minor, currency, opened_at, updated_at, resolved_at, summary, synthetic
             FROM cases
             WHERE id = :id
             """;
@@ -58,7 +58,7 @@ public class CaseRepository {
     public Optional<CaseRecord> findByTypeAndPaypalOrderId(CaseType type, String paypalOrderId) {
         String sql = """
             SELECT id, type, status, severity, paypal_order_id, shop_order_id,
-                   amount_minor, currency, opened_at, updated_at, resolved_at, summary
+                   amount_minor, currency, opened_at, updated_at, resolved_at, summary, synthetic
             FROM cases
             WHERE type = :type AND paypal_order_id = :paypalOrderId
             """;
@@ -82,7 +82,7 @@ public class CaseRepository {
         }
         String sql = """
             SELECT id, type, status, severity, paypal_order_id, shop_order_id,
-                   amount_minor, currency, opened_at, updated_at, resolved_at, summary
+                   amount_minor, currency, opened_at, updated_at, resolved_at, summary, synthetic
             FROM cases
             WHERE %s
             ORDER BY opened_at DESC
@@ -101,10 +101,10 @@ public class CaseRepository {
         String sql = """
             INSERT INTO cases (
                 id, type, status, severity, paypal_order_id, shop_order_id,
-                amount_minor, currency, opened_at, updated_at, resolved_at, summary
+                amount_minor, currency, opened_at, updated_at, resolved_at, summary, synthetic
             ) VALUES (
                 :id, :type, :status, :severity, :paypalOrderId, :shopOrderId,
-                :amountMinor, :currency, :openedAt, :updatedAt, :resolvedAt, :summary
+                :amountMinor, :currency, :openedAt, :updatedAt, :resolvedAt, :summary, :synthetic
             )
             """;
 
@@ -124,6 +124,7 @@ public class CaseRepository {
             .param("updatedAt", Timestamp.from(updated))
             .param("resolvedAt", c.resolvedAt() != null ? Timestamp.from(c.resolvedAt()) : null)
             .param("summary", c.summary())
+            .param("synthetic", c.synthetic())
             .update();
 
         log.info("Inserted new case: id={}, type={}, order={}", c.id(), c.type(), c.paypalOrderId());
@@ -137,6 +138,7 @@ public class CaseRepository {
                 amount_minor = :amountMinor,
                 currency = :currency,
                 summary = :summary,
+                synthetic = :synthetic,
                 updated_at = :updatedAt
             WHERE id = :id
             """;
@@ -150,6 +152,7 @@ public class CaseRepository {
             .param("amountMinor", c.amountMinor())
             .param("currency", c.currency() != null ? c.currency() : "USD")
             .param("summary", c.summary())
+            .param("synthetic", c.synthetic())
             .param("updatedAt", Timestamp.from(updated))
             .update();
 
@@ -176,15 +179,19 @@ public class CaseRepository {
     }
 
     public List<CaseRecord> findAll(String status, String severity, String type, String search, int limit, int offset) {
+        return findAll(status, severity, type, search, true, limit, offset);
+    }
+
+    public List<CaseRecord> findAll(String status, String severity, String type, String search, boolean includeResolved, int limit, int offset) {
         Map<String, Object> params = new HashMap<>();
         StringBuilder sql = new StringBuilder("""
             SELECT id, type, status, severity, paypal_order_id, shop_order_id,
-                   amount_minor, currency, opened_at, updated_at, resolved_at, summary
+                   amount_minor, currency, opened_at, updated_at, resolved_at, summary, synthetic
             FROM cases
             WHERE 1=1
             """);
 
-        applyFilters(sql, params, status, severity, type, search);
+        applyFilters(sql, params, status, severity, type, search, includeResolved);
 
         sql.append(" ORDER BY opened_at DESC LIMIT :limit OFFSET :offset");
         params.put("limit", Math.max(1, limit));
@@ -196,10 +203,14 @@ public class CaseRepository {
     }
 
     public long countAll(String status, String severity, String type, String search) {
+        return countAll(status, severity, type, search, true);
+    }
+
+    public long countAll(String status, String severity, String type, String search, boolean includeResolved) {
         Map<String, Object> params = new HashMap<>();
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM cases WHERE 1=1");
 
-        applyFilters(sql, params, status, severity, type, search);
+        applyFilters(sql, params, status, severity, type, search, includeResolved);
 
         var query = jdbcClient.sql(sql.toString());
         params.forEach(query::param);
@@ -221,6 +232,7 @@ public class CaseRepository {
         return jdbcClient.sql("""
             SELECT opened_at FROM cases
             WHERE status IN ('OPEN', 'INVESTIGATING', 'ACTION_PROPOSED')
+              AND synthetic = FALSE
             ORDER BY opened_at ASC
             LIMIT 1
             """)
@@ -228,7 +240,7 @@ public class CaseRepository {
             .optional();
     }
 
-    private void applyFilters(StringBuilder sql, Map<String, Object> params, String status, String severity, String type, String search) {
+    private void applyFilters(StringBuilder sql, Map<String, Object> params, String status, String severity, String type, String search, boolean includeResolved) {
         if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status)) {
             try {
                 CaseStatus st = CaseStatus.fromString(status);
@@ -236,6 +248,8 @@ public class CaseRepository {
                 params.put("status", st.name());
             } catch (Exception ignored) {
             }
+        } else if (!includeResolved) {
+            sql.append(" AND status IN ('OPEN', 'INVESTIGATING', 'ACTION_PROPOSED')");
         }
 
         if (severity != null && !severity.isBlank() && !"all".equalsIgnoreCase(severity)) {
@@ -284,7 +298,8 @@ public class CaseRepository {
                 openedTs != null ? openedTs.toInstant() : null,
                 updatedTs != null ? updatedTs.toInstant() : null,
                 resolvedTs != null ? resolvedTs.toInstant() : null,
-                rs.getString("summary")
+                rs.getString("summary"),
+                rs.getBoolean("synthetic")
             );
         }
     }

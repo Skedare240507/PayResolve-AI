@@ -19,8 +19,25 @@ public record CaseRecord(
     Instant openedAt,
     Instant updatedAt,
     Instant resolvedAt,
-    String summary
+    String summary,
+    boolean synthetic
 ) {
+    public CaseRecord(
+        String id,
+        CaseType type,
+        CaseStatus status,
+        CaseSeverity severity,
+        String paypalOrderId,
+        String shopOrderId,
+        Long amountMinor,
+        String currency,
+        Instant openedAt,
+        Instant updatedAt,
+        Instant resolvedAt,
+        String summary
+    ) {
+        this(id, type, status, severity, paypalOrderId, shopOrderId, amountMinor, currency, openedAt, updatedAt, resolvedAt, summary, false);
+    }
     public Money amount() {
         if (amountMinor == null) {
             return null;

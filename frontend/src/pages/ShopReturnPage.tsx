@@ -330,7 +330,9 @@ function ShopReturnContent({
                         : 'text-blue-700 dark:text-blue-300'
                     }`}
                   >
-                    Waiting for PayPal&apos;s confirmation (webhook)
+                    {isPaid
+                      ? "PayPal's confirmation (webhook)"
+                      : "Waiting for PayPal's confirmation (webhook)"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">

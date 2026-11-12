@@ -48,9 +48,19 @@ class CaseIntegrationTest {
                 "ORPHAN_CAPTURE"
             )));
 
-        // Verify queue listing contains seeded cases
+        // Verify default queue listing hides RESOLVED cases (4 active seeded cases)
         mockMvc.perform(get("/api/cases")
                 .with(user("viewer").roles("VIEWER"))
+                .param("page", "0")
+                .param("size", "20"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content", hasSize(4)))
+            .andExpect(jsonPath("$.totalElements").value(4));
+
+        // Verify includeResolved=true returns all seeded cases including RESOLVED
+        mockMvc.perform(get("/api/cases")
+                .with(user("viewer").roles("VIEWER"))
+                .param("includeResolved", "true")
                 .param("page", "0")
                 .param("size", "20"))
             .andExpect(status().isOk())

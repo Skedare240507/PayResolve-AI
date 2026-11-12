@@ -97,7 +97,6 @@ class EvidenceGraphDerivationTest {
         when(shopOrderService.findPaymentByOrderId("ORD-10482")).thenReturn(Optional.empty());
         when(shopOrderService.getRefundsByOrderId("ORD-10482")).thenReturn(List.of());
         when(shopOrderService.getShipmentsByOrderId("ORD-10482")).thenReturn(List.of());
-        when(webhookEventRepository.findAll(anyInt(), anyInt())).thenReturn(List.of());
 
         EvidenceGraphDto graph = evidenceService.deriveGraph("PR-0142");
 
@@ -171,7 +170,6 @@ class EvidenceGraphDerivationTest {
         when(shopOrderService.findPaymentByOrderId("ORD-10479")).thenReturn(Optional.empty());
         when(shopOrderService.getRefundsByOrderId("ORD-10479")).thenReturn(List.of());
         when(shopOrderService.getShipmentsByOrderId("ORD-10479")).thenReturn(List.of());
-        when(webhookEventRepository.findAll(anyInt(), anyInt())).thenReturn(List.of());
 
         EvidenceGraphDto graph = evidenceService.deriveGraph("PR-0141");
 
@@ -224,7 +222,6 @@ class EvidenceGraphDerivationTest {
         when(shopOrderService.findPaymentByOrderId("ORD-10477")).thenReturn(Optional.empty());
         when(shopOrderService.getRefundsByOrderId("ORD-10477")).thenReturn(List.of());
         when(shopOrderService.getShipmentsByOrderId("ORD-10477")).thenReturn(List.of());
-        when(webhookEventRepository.findAll(anyInt(), anyInt())).thenReturn(List.of());
 
         EvidenceGraphDto graph = evidenceService.deriveGraph("PR-0140");
 
@@ -275,7 +272,6 @@ class EvidenceGraphDerivationTest {
         when(shopOrderService.findPaymentByOrderId("ORD-10470")).thenReturn(Optional.empty());
         when(shopOrderService.getRefundsByOrderId("ORD-10470")).thenReturn(List.of());
         when(shopOrderService.getShipmentsByOrderId("ORD-10470")).thenReturn(List.of());
-        when(webhookEventRepository.findAll(anyInt(), anyInt())).thenReturn(List.of());
 
         EvidenceGraphDto graph = evidenceService.deriveGraph("PR-0139");
 
@@ -310,7 +306,6 @@ class EvidenceGraphDerivationTest {
 
         when(caseService.getCaseRecordById("PR-0138")).thenReturn(caseRecord);
         when(shopOrderService.findOrderByPayPalOrderId("CAP-998877")).thenReturn(Optional.empty());
-        when(webhookEventRepository.findAll(anyInt(), anyInt())).thenReturn(List.of());
 
         EvidenceGraphDto graph = evidenceService.deriveGraph("PR-0138");
 

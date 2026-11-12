@@ -35,6 +35,7 @@ export interface DisplayEvent {
   signature: 'Verified' | 'Unverified';
   status: 'Processed' | 'Failed' | 'Duplicate' | 'Received';
   tries: number;
+  deliveryCount: number;
   receivedAtDate: Date | null;
   at: string;
   rawPayload: string;
@@ -136,6 +137,7 @@ export default function EventInboxPage() {
         signature: sig,
         status,
         tries: Number(e.tries ?? 1),
+        deliveryCount: Number(e.deliveryCount ?? 1),
         receivedAtDate: recDate,
         at: e.at || (recDate ? recDate.toLocaleTimeString([], { hour12: false }) : '—'),
         rawPayload: e.rawPayload || '{}',
@@ -236,11 +238,25 @@ export default function EventInboxPage() {
       {
         field: 'status',
         headerName: 'Status',
-        width: 135,
+        width: 245,
+        minWidth: 165,
         filter: 'agTextColumnFilter',
-        cellRenderer: (params: ICellRendererParams<DisplayEvent>) => (
-          <StatusPillCell status={params.value} />
-        ),
+        cellRenderer: (params: ICellRendererParams<DisplayEvent>) => {
+          const dc = params.data?.deliveryCount ?? 1;
+          return (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <StatusPillCell status={params.value} />
+              {dc > 1 && (
+                <span
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70 whitespace-nowrap"
+                  title={`Webhook delivered ${dc} times and absorbed idempotently`}
+                >
+                  delivered {dc} times, absorbed
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         field: 'tries',
@@ -487,6 +503,11 @@ export default function EventInboxPage() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
                     Received {selectedEvent.at} &middot; {selectedEvent.signature}
                   </p>
+                  {selectedEvent.deliveryCount > 1 && (
+                    <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70">
+                      delivered {selectedEvent.deliveryCount} times, absorbed
+                    </span>
+                  )}
                 </div>
 
                 {/* Attempts / Processing Log */}

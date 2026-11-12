@@ -85,10 +85,14 @@ public class CaseDetectionService {
         // 2. Evaluate orphan captures from verified webhook events using structured ID columns
         Set<String> knownShopOrderIds = new HashSet<>();
         Set<String> knownPaypalOrderIds = new HashSet<>();
+        Set<String> knownCaptureIds = new HashSet<>(shopOrderService.findAllCaptureIds());
         orders.forEach(o -> {
             knownShopOrderIds.add(o.id());
             if (o.paypalOrderId() != null) {
                 knownPaypalOrderIds.add(o.paypalOrderId());
+            }
+            if (o.paypalCaptureId() != null) {
+                knownCaptureIds.add(o.paypalCaptureId());
             }
         });
 
@@ -96,7 +100,7 @@ public class CaseDetectionService {
             if ("PAYMENT.CAPTURE.COMPLETED".equalsIgnoreCase(event.eventType()) && event.verified()) {
                 boolean matchesOrder = (event.customId() != null && knownShopOrderIds.contains(event.customId()))
                     || (event.paypalOrderId() != null && knownPaypalOrderIds.contains(event.paypalOrderId()))
-                    || (event.resourceId() != null && knownPaypalOrderIds.contains(event.resourceId()));
+                    || (event.resourceId() != null && (knownPaypalOrderIds.contains(event.resourceId()) || knownCaptureIds.contains(event.resourceId())));
 
                 if (!matchesOrder) {
                     totalEvaluated++;
@@ -162,22 +166,46 @@ public class CaseDetectionService {
             if (targetOrder == null && event.paypalOrderId() != null && !event.paypalOrderId().isBlank()) {
                 targetOrder = shopOrderService.findOrderByPayPalOrderId(event.paypalOrderId()).orElse(null);
             }
-
-            List<WebhookEvent> events = targetOrder != null
-                ? webhookEventRepository.findByOrderRefs(targetOrder.id(), targetOrder.paypalOrderId(), null)
-                : List.of(event);
-            if (events.isEmpty()) {
-                events = List.of(event);
+            if (targetOrder == null && event.resourceId() != null && !event.resourceId().isBlank()) {
+                targetOrder = shopOrderService.findPaymentByCaptureId(event.resourceId())
+                    .flatMap(p -> shopOrderService.findOrderById(p.shopOrderId()))
+                    .orElse(null);
             }
 
-            DetectionSnapshot snapshot = targetOrder != null
-                ? buildSnapshotForOrder(targetOrder, events)
-                : DetectionSnapshot.builder()
+            if (targetOrder == null) {
+                String type = event.eventType() != null ? event.eventType().trim().toUpperCase(Locale.ROOT) : "";
+                if (!type.startsWith("PAYMENT.CAPTURE.")) {
+                    log.debug("Unlinked non-capture event {} ({}); creating no case", event.paypalEventId(), type);
+                    return;
+                }
+                DetectionSnapshot orphanSnapshot = DetectionSnapshot.builder()
                     .targetId(event.resourceId() != null ? event.resourceId() : "EVT-" + event.paypalEventId())
                     .shopOrder(null)
                     .addWebhookEvent(event)
                     .evaluatedAt(clock.instant())
                     .build();
+                for (Detector detector : detectors) {
+                    if (detector.supportedType() == CaseType.ORPHAN_CAPTURE) {
+                        for (DetectionFinding finding : detector.detect(orphanSnapshot)) {
+                            caseService.upsertCase(finding);
+                        }
+                    }
+                }
+                return;
+            }
+
+            List<PaymentRecord> orderPayments = shopOrderService.findPaymentsByOrderId(targetOrder.id());
+            String captureId = targetOrder.paypalCaptureId();
+            if (captureId == null && !orderPayments.isEmpty()) {
+                captureId = orderPayments.get(0).paypalCaptureId();
+            }
+
+            List<WebhookEvent> events = webhookEventRepository.findByOrderRefs(targetOrder.id(), targetOrder.paypalOrderId(), captureId);
+            if (events.isEmpty()) {
+                events = List.of(event);
+            }
+
+            DetectionSnapshot snapshot = buildSnapshotForOrder(targetOrder, events);
 
             for (Detector detector : detectors) {
                 List<DetectionFinding> findings = detector.detect(snapshot);
@@ -191,9 +219,7 @@ public class CaseDetectionService {
     }
 
     private DetectionSnapshot buildSnapshotForOrder(ShopOrder order, List<WebhookEvent> candidateEvents) {
-        List<PaymentRecord> payments = shopOrderService.findPaymentByOrderId(order.id())
-            .map(List::of)
-            .orElse(List.of());
+        List<PaymentRecord> payments = shopOrderService.findPaymentsByOrderId(order.id());
 
         List<RefundRecord> refunds = shopOrderService.getRefundsByOrderId(order.id());
 
