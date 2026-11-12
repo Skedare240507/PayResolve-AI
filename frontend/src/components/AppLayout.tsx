@@ -4,6 +4,7 @@ import { GoogleIcon } from './GoogleIcon';
 import { logoutUser, getCurrentUser } from '../lib/authStore';
 import { PayResolveLogo } from './PayResolveLogo';
 import { ThemeToggle } from './ThemeToggle';
+import { DemoFaultBanner } from './DemoFaultBanner';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -184,6 +185,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       {/* ─── MAIN PAGE CONTENT ─── */}
       <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden p-4 sm:p-8 lg:p-12">
+        <DemoFaultBanner />
         <div key={location.pathname} className="route-fade-slide">
           {children}
         </div>

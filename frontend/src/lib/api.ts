@@ -108,8 +108,11 @@ export type PayPalDiagnosticsDto = components['schemas']['PayPalDiagnosticsDto']
 export type DiagnosticCheckDto = components['schemas']['DiagnosticCheckDto'];
 
 // Faults & Benchmark types
-export type DemoFaultSwitchesRecord = components['schemas']['DemoFaultsDto'];
-export type DemoFaultsDto = components['schemas']['DemoFaultsDto'];
+export type DemoFaultsDto = components['schemas']['DemoFaultsDto'] & {
+  resetsAt?: string | null;
+  activeFaultNames?: string[];
+};
+export type DemoFaultSwitchesRecord = DemoFaultsDto;
 export type BenchmarkResultDto = components['schemas']['BenchmarkResultDto'];
 export type BenchmarkCaseDetail = components['schemas']['BenchmarkCaseDetail'];
 

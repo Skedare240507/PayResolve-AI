@@ -64,6 +64,7 @@ function ToggleSwitch({
 export default function DemoShopPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isOperator = user?.role === 'operator';
   const [showBuyerPassword, setShowBuyerPassword] = useState(false);
 
   const [cart, setCart] = useState<{ [id: string]: number }>({
@@ -489,44 +490,54 @@ export default function DemoShopPage() {
                 </span>
               </div>
 
-              {/* Accessible Role Switch Toggles */}
+              {/* Accessible Role Switch Toggles (Operator Only) */}
               <div className="space-y-2.5 divide-y divide-slate-100 dark:divide-slate-800/60">
                 <ToggleSwitch
                   label="Fail webhook handler"
                   description="Webhook returns 500; order left Pending"
                   checked={faultSwitches.failWebhookHandler}
+                  disabled={!isOperator || switchMutation.isPending}
                   onChange={() => toggleSwitch('failWebhookHandler')}
                 />
                 <ToggleSwitch
                   label="Drop webhook"
                   description="Simulates dropped packet in transit"
                   checked={faultSwitches.dropWebhook}
+                  disabled={!isOperator || switchMutation.isPending}
                   onChange={() => toggleSwitch('dropWebhook')}
                 />
                 <ToggleSwitch
                   label="Alter order total"
                   description="Simulates $10 line-item roundoff discrepancy"
                   checked={faultSwitches.alterOrderTotal}
+                  disabled={!isOperator || switchMutation.isPending}
                   onChange={() => toggleSwitch('alterOrderTotal')}
                 />
                 <ToggleSwitch
                   label="Duplicate delivery"
                   description="Fires 2 identical webhooks simultaneously"
                   checked={faultSwitches.duplicateDelivery}
+                  disabled={!isOperator || switchMutation.isPending}
                   onChange={() => toggleSwitch('duplicateDelivery')}
                 />
               </div>
 
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => resetFaultsMutation.mutate()}
-                  disabled={resetFaultsMutation.isPending}
-                  className="w-full py-2 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs transition-colors"
-                >
-                  {resetFaultsMutation.isPending ? 'Resetting...' : 'Reset all to false'}
-                </button>
-              </div>
+              {isOperator ? (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => resetFaultsMutation.mutate()}
+                    disabled={resetFaultsMutation.isPending}
+                    className="w-full py-2 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-2xs transition-colors"
+                  >
+                    {resetFaultsMutation.isPending ? 'Resetting...' : 'Reset all to false'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 pt-1">
+                  Operator role required to toggle or reset demo fault switches.
+                </p>
+              )}
             </div>
 
             {/* Recent Orders Card */}

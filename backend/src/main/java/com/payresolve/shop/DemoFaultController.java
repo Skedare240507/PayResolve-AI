@@ -32,23 +32,17 @@ public class DemoFaultController {
     }
 
     @PostMapping
-    @Operation(summary = "Update demo fault switches")
+    @Operation(summary = "Update demo fault switches (auto-resets 10 minutes after activation)")
     public DemoFaultsDto updateFaults(@RequestBody DemoFaultsDto dto) {
-        if (dto.failWebhookHandler() != null) {
-            faultSwitches.setFailWebhookHandler(dto.failWebhookHandler());
-        }
-        if (dto.dropWebhook() != null) {
-            faultSwitches.setDropWebhook(dto.dropWebhook());
-        }
-        if (dto.duplicateDelivery() != null) {
-            faultSwitches.setDuplicateDelivery(dto.duplicateDelivery());
-        }
-        if (dto.alterOrderTotal() != null) {
-            faultSwitches.setAlterOrderTotal(dto.alterOrderTotal());
-        }
-        log.info("Updated demo fault switches: failHandler={}, dropWebhook={}, duplicateDelivery={}, alterOrderTotal={}",
+        faultSwitches.updateAll(
+            dto.failWebhookHandler(),
+            dto.dropWebhook(),
+            dto.duplicateDelivery(),
+            dto.alterOrderTotal()
+        );
+        log.info("Updated demo fault switches: failHandler={}, dropWebhook={}, duplicateDelivery={}, alterOrderTotal={}, resetsAt={}",
             faultSwitches.isFailWebhookHandler(), faultSwitches.isDropWebhook(),
-            faultSwitches.isDuplicateDelivery(), faultSwitches.isAlterOrderTotal());
+            faultSwitches.isDuplicateDelivery(), faultSwitches.isAlterOrderTotal(), faultSwitches.getResetsAt());
         return DemoFaultsDto.fromSwitches(faultSwitches);
     }
 
