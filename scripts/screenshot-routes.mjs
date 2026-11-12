@@ -9,10 +9,11 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const frontendDir = path.resolve(projectRoot, 'frontend');
 
-// Routes mapping to design PNGs
+// Routes mapping to design PNGs and all app views
 const ROUTES = [
   { name: 'landing', path: '/' },
   { name: 'signin', path: '/signin' },
+  { name: 'signup', path: '/signup' },
   { name: 'forgot-password', path: '/forgot-password' },
   { name: 'check-email', path: '/check-email' },
   { name: 'reset-password', path: '/reset-password' },
@@ -22,9 +23,12 @@ const ROUTES = [
   { name: 'case-workspace', path: '/case/PR-0142' },
   { name: 'events', path: '/events' },
   { name: 'demo-shop', path: '/shop' },
+  { name: 'shop-return', path: '/shop/return' },
+  { name: 'shop-cancel', path: '/shop/cancel' },
   { name: 'actions-audit', path: '/actions' },
   { name: 'benchmark', path: '/benchmark' },
   { name: 'operations', path: '/operations' },
+  { name: 'graph-explorer', path: '/graph-explorer' },
   { name: 'sandbox-unreachable', path: '/status' },
   { name: 'empty-error-feedback-states', path: '/ui-states' },
   { name: 'loading-states', path: '/ui-states?tab=loading' },
@@ -32,6 +36,11 @@ const ROUTES = [
   { name: '404-not-found', path: '/404' },
   { name: '500-server-error', path: '/500' },
   { name: 'redirecting', path: '/redirecting' },
+];
+
+const VIEWPORTS = [
+  { name: '1440', width: 1440, height: 900 },
+  { name: '390', width: 390, height: 844 },
 ];
 
 // Target directory for screenshots: configurable via arg or defaults to docs/report/screens/before
@@ -86,59 +95,100 @@ async function run() {
   try {
     const browser = await chromium.launch({ headless: true });
 
-    for (const mode of ['light', 'dark']) {
-      console.log(`\nCapturing [${mode.toUpperCase()}] mode screenshots at 1440px wide...`);
-      const context = await browser.newContext({
-        viewport: { width: 1440, height: 900 },
-        colorScheme: mode,
-      });
+    for (const vp of VIEWPORTS) {
+      for (const mode of ['light', 'dark']) {
+        console.log(`\nCapturing [${mode.toUpperCase()}] mode screenshots at ${vp.width}px (${vp.name})...`);
+        const context = await browser.newContext({
+          viewport: { width: vp.width, height: vp.height },
+          colorScheme: mode,
+        });
 
-      // Preset localStorage auth and theme
-      await context.addInitScript((m) => {
-        const user = {
-          username: 'operator',
-          role: 'operator',
-          email: 'operator@payresolve.dev',
-          createdAt: new Date().toISOString()
-        };
-        localStorage.setItem('payresolve_current_user', JSON.stringify(user));
-        localStorage.setItem('payresolve_theme', m);
-        localStorage.setItem('payresolve-theme', m);
-        if (m === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      }, mode);
+        // Preset localStorage auth and theme safely
+        await context.addInitScript((m) => {
+          const user = {
+            id: 1,
+            username: 'operator',
+            role: 'operator',
+            email: 'operator@payresolve.dev',
+            authenticated: true,
+            createdAt: new Date().toISOString()
+          };
+          try {
+            localStorage.setItem('payresolve_current_user', JSON.stringify(user));
+            localStorage.setItem('payresolve_theme', m);
+            localStorage.setItem('payresolve-theme', m);
+          } catch {}
 
-      for (const route of ROUTES) {
-        const page = await context.newPage();
-        const url = `${baseUrl}${route.path}`;
+          const applyTheme = () => {
+            try {
+              if (document && document.documentElement) {
+                if (m === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              }
+            } catch {}
+          };
+
+          if (typeof document !== 'undefined' && document.readyState !== 'loading') {
+            applyTheme();
+          } else if (typeof window !== 'undefined') {
+            window.addEventListener('DOMContentLoaded', applyTheme);
+          }
+        }, mode);
+
+        // Authenticate context with backend session so API endpoints return real data
         try {
-          await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 });
-
-          // Apply theme explicitly
-          await page.evaluate((m) => {
-            if (m === 'dark') {
-              document.documentElement.classList.add('dark');
-            } else {
-              document.documentElement.classList.remove('dark');
-            }
-          }, mode);
-
-          await page.waitForTimeout(400);
-
-          const shotPath = path.join(outputDir, `${route.name}-${mode}.png`);
-          await page.screenshot({ path: shotPath, fullPage: true });
-          console.log(`  ✓ Saved: ${route.name}-${mode}.png`);
-        } catch (err) {
-          console.error(`  ✗ Failed route ${route.path}:`, err.message);
-        } finally {
-          await page.close().catch(() => {});
+          const csrfRes = await context.request.get(`${baseUrl}/api/auth/csrf`);
+          if (csrfRes.ok()) {
+            const csrfData = await csrfRes.json();
+            await context.request.post(`${baseUrl}/api/auth/login`, {
+              headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfData.token },
+              data: { username: 'operator', password: 'operator123' },
+            });
+          }
+        } catch (e) {
+          console.warn('Session authentication warmup note:', e.message);
         }
-      }
 
-      await context.close();
+        for (const route of ROUTES) {
+          const page = await context.newPage();
+          const url = `${baseUrl}${route.path}`;
+
+          page.on('pageerror', (err) => {
+            console.error(`  [CONSOLE ERROR on ${route.path}]:`, err.message);
+          });
+
+          try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+            await page.waitForTimeout(600);
+
+            // Apply theme explicitly
+            await page.evaluate((m) => {
+              if (document?.documentElement?.classList) {
+                if (m === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              }
+            }, mode);
+
+            await page.waitForTimeout(300);
+
+            const shotPath = path.join(outputDir, `${route.name}-${vp.name}-${mode}.png`);
+            await page.screenshot({ path: shotPath, fullPage: true });
+            console.log(`  ✓ Saved: ${route.name}-${vp.name}-${mode}.png`);
+          } catch (err) {
+            console.error(`  ✗ Failed route ${route.path}:`, err.message);
+          } finally {
+            await page.close().catch(() => {});
+          }
+        }
+
+        await context.close();
+      }
     }
 
     await browser.close();
