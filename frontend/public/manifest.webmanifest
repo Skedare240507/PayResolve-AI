@@ -1,0 +1,22 @@
+{
+  "name": "PayResolve AI",
+  "short_name": "PayResolve",
+  "description": "Merchant-side PayPal exception engine with an evidence graph and AI investigator.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071f49",
+  "theme_color": "#071f49",
+  "icons": [
+    {
+      "src": "/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+

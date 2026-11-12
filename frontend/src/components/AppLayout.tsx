@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleIcon } from './GoogleIcon';
 import { logoutUser, getCurrentUser } from '../lib/authStore';
-import { PayResolveLogo } from './PayResolveLogo';
+import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { DemoFaultBanner } from './DemoFaultBanner';
 
@@ -44,8 +44,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       
       {/* Mobile Top Bar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-[#0d131f] border-b border-slate-200 dark:border-slate-800 shrink-0 z-30">
-        <Link to="/queue">
-          <PayResolveLogo markSize={24} />
+        <Link to="/queue" aria-label="PayResolve AI Home">
+          <Logo variant="symbol" size="mobileHeader" />
         </Link>
         <div className="flex items-center space-x-2">
           <ThemeToggle />
@@ -98,7 +98,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <div className="space-y-6">
           {/* Brand Logo — Auto-switches based on active theme */}
           <Link to="/" className="px-2 py-1 block cursor-pointer" aria-label="PayResolve AI Home">
-            <PayResolveLogo height={32} />
+            <Logo variant="lockup" size="sidebar" />
           </Link>
 
           {/* Target Navigation List with WCAG AA contrast tokens */}
